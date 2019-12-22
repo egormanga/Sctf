@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+	{% block base_head -%}
+		<style>
+			code {
+				color: #fc427b;
+			}
+
+			.code-block code {
+				color: #22a6b3;
+			}
+
+			#task-popup-wrapper {
+				position: fixed;
+				left: 50%;
+				display: none;
+			}
+
+			.task-popup-background {
+				position: fixed;
+				top: 0px;
+				bottom: 0px;
+				left: 0px;
+				right: 0px;
+				background-color: black;
+				opacity: 0;
+				transition: opacity 0.2s;
+				{% if g.night -%}
+					display: none;
+				{%- endif %}
+			}
+
+			.task-popup-shown .task-popup-background {
+				opacity: 0.6;
+			}
+
+			.task-popup {
+				position: relative;
+				left: -50%;
+				top: -16px;
+				opacity: 0;
+				transition: top 0.5s, opacity 0.2s 0.1s;
+				min-width: 420px;
+				max-width: 480px;
+				padding: 12px 18px 18px 18px;
+				background-color: white;
+				box-shadow: 0px 0px 2px gray;
+				font-family: 'Open Sans', sans-serif;
+			}
+
+			.task-popup a {
+				text-decoration: none;
+				color: blue;
+			}
+
+			.task-popup-shown .task-popup {
+				top: 24px;
+				opacity: 1;
+			}
+
+			.task-popup-close {
+				float: right;
+				cursor: pointer;
+				font-size: 1.5rem;
+				color: #777 !important;
+			}
+
+			.task-popup-title, .task-popup-cost {
+				width: 100%;
+				text-align: center;
+				color: black;
+			}
+
+			.task-popup-title {
+				font-size: 42px;
+				margin-right: 2em;
+				font-family: 'Open Sans Condensed', 'Ubuntu', sans-serif;
+			}
+
+			.task-popup-cost {
+				font-size: 24px;
+				font-family: 'Nunito', 'Ubuntu', sans-serif;
+			}
+
+			.task-popup-solved {
+				text-align: center;
+			}
+
+			.task-popup-content {
+				word-break: break-word;
+			}
+
+			.task-popup-flag-input {
+				padding: 8px;
+				width: 100%;
+			}
+
+			.task-popup-flag-submit {
+				background-color: #4caf50;
+				border: 2px solid #4caf50;
+				border-radius: 4px;
+				color: white;
+				padding: 8px 16px;
+				font-size: 16px;
+				cursor: pointer;
+				transition: 0.4s;
+				margin-left: 12px;
+				float: right;
+			}
+
+			.task-popup-flag-submit:hover {
+				background-color: white;
+				color: black;
+			}
+
+			.task-popup-flag-submit:disabled {
+				background-color: gray;
+				border: 2px groove darkgray;
+				color: white;
+				cursor: default;
+			}
+		</style>
+
+		<script>
+			var tasks = {};
+
+			$.ajax({
+				url: "{{ url_for('tasks_json') }}",
+				success: data => tasks = data,
+				error: console.error,
+			});
+
+			function onload() {
+				tp = document.getElementById('task-popup-wrapper');
+				tp.addEventListener('transitionend', function(){
+					if (!this.classList.contains('task-popup-shown'))
+						this.style.display = 'none';
+				}.bind(tp));
+				$(document).keyup(e => {if (e.keyCode == 27) task_popup_hide();});
+				if (window.location.hash.substr(1))
+					task_popup_show(window.location.hash.substr(1));
+			}
+
+			function task_popup_hide() {
+				('pushState' in history)?history.pushState('', document.title, window.location.pathname + window.location.search):window.location.hash = '';
+				tp = document.getElementById('task-popup-wrapper')
+				tp.classList.remove('task-popup-shown');
+			}
+
+			function task_popup_show(id) {
+				tp = document.getElementById('task-popup-wrapper');
+				task = tasks[id];
+				tp.querySelector('.task-popup').task_id = id;
+				tp.querySelector('.task-popup-title').textContent = task.title;
+				tp.querySelector('.task-popup-cost').textContent = task.cost;
+				tp.querySelector('.task-popup-solved-by').textContent = task.solved;
+				tp.querySelector('.task-popup-content').innerHTML = task.desc;
+				tp.querySelector('.task-popup-attachments').innerHTML = task.files.map(x => '<a href="'+"{{ url_for('taskdata') }}"+'?id='+id+'&file='+x[0]+'&token='+x[1]+'">&#128462; '+x[0]+'</a>').join('<br>');
+				$('.task-popup-content p').has('code:only-child').each(function(){
+					const p = $(this);
+					let hasalsotext = false;
+					p.contents().each(function(){
+						if (this.nodeType === 3 && this.nodeValue.trim() !== '') {
+							hasalsotext = true;
+							return false;  // break
+						}
+					});
+					if (!hasalsotext) p.addClass('code-block');
+				});
+				tp.style.display = 'block';
+				setTimeout(() => tp.classList.add('task-popup-shown'), 0);
+			}
+
+			function validate_flag() {
+				valid = document.querySelector('.task-popup-flag-input').value.match(/^{{ g.taskset.flag_prefix }}{.+}$/);
+				document.querySelector('.task-popup-flag-submit').disabled = !valid;
+				return valid;
+			}
+
+			function submit_flag() {
+				$.ajax({
+					url: "{{ url_for('submit_flag') }}?id="+document.querySelector('.task-popup').task_id+'&flag='+document.querySelector('.task-popup-flag-input').value,
+					success: data => {alert(data); if (data == 'ok!') window.location.href = "{{ url_for('index') }}";},
+					error: console.error,
+				});
+			}
+		</script>
+
+		{% block head %}{% endblock %}
+	{%- endblock %}
+
+	{% block body -%}
+		<div id="task-popup-wrapper">
+			<div class="task-popup-background" onclick="task_popup_hide()"></div>
+			<div class="task-popup" task_id="">
+				<a class="task-popup-close" onclick="task_popup_hide()">&times;</a>
+				<div class="task-popup-title"></div>
+				<div class="task-popup-cost"></div>
+				<div class="task-popup-solved">Solved by: <span class="task-popup-solved-by"></span></div>
+				<div class="task-popup-content"></div>
+				<div class="task-popup-attachments"></div>
+				<br>
+				<div style="display: flex;">
+					<input class="task-popup-flag-input" placeholder="{{ g.taskset.flag_prefix }}{...}" oninput="validate_flag()" onkeypress="if (event.keyCode == 13 && validate_flag()) submit_flag()"></input>
+					<button class="task-popup-flag-submit" onclick="submit_flag()" disabled>Submit</button>
+				</div>
+			</div>
+		</div>
+
+		{% block content %}{% endblock %}
+	{%- endblock %}

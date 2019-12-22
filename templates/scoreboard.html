@@ -1,0 +1,82 @@
+{% extends "main.html" %}
+
+	{% block head -%}
+		<style>
+			{% if g.night -%}
+				body {
+				{# -#}	background-color: #111;
+				{# -#}	filter: invert();
+			{# -#}	}
+
+			{% endif -%}
+
+			a {
+				color: black;
+				text-decoration: none;
+			}
+
+			a:hover {
+				text-decoration: underline;
+			}
+
+			.zeroscored, .zeroscored a {
+				color: #777;
+			}
+
+			.zeroscored a:hover {
+				color: black;
+			}
+		</style>
+	{%- endblock %}
+
+	{% block title -%}
+		Scoreboard
+	{%- endblock %}
+
+	{% block header -%}
+		<font size="4"> | <a href="{{ url_for('index') }}">Tasks</a></font></h1>
+	{%- endblock %}
+
+	{% block content -%}
+		<table rules="rows" cellpadding="4" style="width: auto; min-width: 50%; font-family: 'Ubuntu Mono', 'Monospace'; font-size: 24px;">
+			<tr>
+				<th width="32" align="left" rowspan="2">#</th>
+				<th align="left" rowspan="2">Name</th>
+				<th width="64" rowspan="2">Score</th>
+				<th rowspan="2"></th>
+				<th align="right">Solved tasks</th>
+			</tr>
+			{% set tasks = g.builtins.sorted(g.taskset.tasks.values(), key=g.operator.attrgetter('cost')) %}
+			<tr>
+				{%- for i in tasks %}
+				{# -#}	<th><a href="#{{ i.id }}" onclick="task_popup_show('{{ i.id }}')">{{ i.id }}</a><br>{{ i.scoring }}</th>
+				{%- endfor %}
+			</tr>
+			{% for ii, (user, score) in scoreboard %}
+			{# -#}	<tr{% if score == 0 %} class="zeroscored"{% endif %}>
+				{# -#}	<td>{{ ii+1 }}</td>
+				{# -#}	<td><a href="{{ url_for('user', nickname=user.nickname) }}">{{ user.nickname }}</a></td>
+				{# -#}	<td align="right">{{ score }}</td>
+				{# -#}	<td></td>
+					{%- set solved = user.solved.split(',') -%}
+					{% for i in tasks %}
+				{# -#}		<td align="center">
+							{%- if i.id in solved -%}
+								+
+							{%- endif -%}
+						</td>
+					{%- endfor %}
+			{# -#}	</tr>
+		{# -#}	{%- endfor -%}
+	{# -#}	</table>
+
+		<script>
+			(function lp() {
+				$.ajax({
+					url: "{{ url_for('lp_scoreboard') }}",
+					success: r => {if (r == '1') window.location.reload();},
+					error: e => {console.error(e); setTimeout(lp, 5000)},
+				});
+			})()
+		</script>
+	{%- endblock %}

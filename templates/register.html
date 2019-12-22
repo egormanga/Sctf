@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+	{% block title -%}
+		Register
+	{%- endblock %}
+
+	{% block header -%}
+		<font size="4"> | <a href="{{ url_for('login') }}">Login</a></font>
+	{%- endblock %}
+
+	{% block body -%}
+		<form action="" method="post" name="register">
+			{{ form.hidden_tag() }}
+			<p>{{ form.nickname(placeholder=form.nickname.label.text) }}</p>
+			<p>{{ form.email(placeholder=form.email.label.text) }}</p>
+			<p>{{ form.password(placeholder=form.password.label.text) }}</p>
+			<p>{{ form.password_repeat(placeholder=form.password_repeat.label.text) }}</p>
+			<p>{{ form.remember_me }} {{ form.remember_me.label }}</p>
+			<p><input type="submit" value="Register"></p>
+		</form>
+	{%- endblock %}

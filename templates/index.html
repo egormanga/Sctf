@@ -1,0 +1,88 @@
+{% extends "main.html" %}
+
+	{% block head -%}
+		<style>
+			a {
+				text-decoration: none;
+				color: blue;
+			}
+
+			#tasks {
+				padding: 0px 72px;
+				column-count: {{ g.builtins.len(g.taskset.cats) }};
+				column-gap: 32px;
+				column-rule: 2px solid lightblue;
+			}
+
+			@media(max-width: 1366px) {
+				#tasks {
+					column-count: 5;
+				}
+			}
+
+			@media(max-width: 1280px) {
+				#tasks {
+					column-count: 4;
+				}
+			}
+
+			@media(max-width: 1024px) {
+				#tasks {
+					column-count: 3;
+				}
+			}
+
+			@media(max-width: 768px) {
+				#tasks {
+					column-count: 2;
+				}
+			}
+
+			@media(max-width: 512px) {
+				#tasks {
+					column-count: 1;
+				}
+			}
+
+			#tasks > div {
+				break-inside: avoid;
+				display: table;
+			}
+
+			#tasks-header {
+				font-family: 'Nunito', 'Ubuntu', sans-serif;
+				font-weight: 400;
+				margin-left: 32px;
+			}
+
+			.cat-header {
+				font-weight: 200;
+			}
+
+			.task {
+				margin: 16px;
+			}
+		</style>
+	{%- endblock %}
+
+	{% block header -%}
+	<font size="4"> | <a href="{{ url_for('scoreboard') }}">Scoreboard</a> <font size="3">| <a href="{{ url_for('logout') }}">Logout</a></font></font>
+	{%- endblock %}
+
+	{% block content -%}
+		<h1 id="tasks-header">Tasks:</h1>
+		<div id="tasks">
+	{# -#}	{% for cat in g.taskset.cats -%}
+		{##}		<div>
+				{# -#}	<h2 class="cat-header">{{ cat }}</h2>
+					{%- for i in g.taskset.cats[cat] %}
+				{# -#}		<div class="task">
+							{%- if i.id in g.user.solved.split(',') -%}<strike>{%- endif -%}
+							<a href="#{{ i.id }}" onclick="task_popup_show('{{ i.id }}')">{{ i.title }}</a>
+							{%- if i.id in g.user.solved.split(',') -%}</strike> (solved){%- endif -%}
+						</div>
+					{%- endfor %}
+			{# -#}	</div>
+	{# -#}	{%- endfor -%}
+	{##}	</div>
+	{%- endblock %}

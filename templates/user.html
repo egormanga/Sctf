@@ -1,0 +1,39 @@
+{% extends "main.html" %}
+
+	{% block head -%}
+		<style>
+			a {
+				color: black;
+				text-decoration: none;
+			}
+
+			a:hover {
+				text-decoration: underline;
+			}
+		</style>
+	{%- endblock %}
+
+	{% block title -%}
+		User <code style="color: initial;">{{ u.nickname }}</code> {% if u.admin %}<span title="admin">&star;</span>{% endif %}
+	{%- endblock %}
+
+	{% block header -%}
+		<font size="4"> | <a href="{{ url_for('index') }}">Tasks</a> | <a href="{{ url_for('scoreboard') }}">Scoreboard</a></font>
+	{%- endblock %}
+
+	{% block content -%}
+		{% if g.user.admin -%}
+			<h2>E-mail: {{ u.email }}</h2>
+		{%- endif %}
+		<h2>Score: {{ u.score }}</h2>
+		<b>Solved tasks:</b>
+		{% set tasks = g.builtins.sorted(g.taskset.tasks.values(), key=g.operator.attrgetter('cost'), reverse=True) -%}
+		{% set solved = u.solved.split(',') -%}
+		{% for i in tasks -%}
+			{% if i.id in solved -%}
+				<li><a href="#{{ i.id }}" onclick="task_popup_show('{{ i.id }}')">{{ i.title }}</a> | {{ i.scoring }}</li>
+		{# -#}	{% endif %}
+		{%- else %}
+			(none)
+		{%- endfor %}
+	{%- endblock %}

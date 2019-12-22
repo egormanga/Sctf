@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		{%- for font in ('Nunito', 'OpenSans', 'OpenSansCondensedLight') -%}
+			{% for charset in ('latin', 'cyrillic') %}
+		{# -#}		<link rel="preload" href="{{ url_for('static', filename='fonts/{font}_{charset}.woff2'.format(font=font, charset=charset)) }}" as="font" crossorigin>
+			{%- endfor %}
+		{%- endfor %}
+		<link href="{{ url_for('fonts_css') }}" rel="stylesheet">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+		<title>Sctf by Sdore</title>
+
+		<style>
+			body {
+				{% if g.night -%}
+					background-color: #111;
+				{# -#}	filter: invert();
+				{%- else -%}
+					background-color: #fafafa;
+				{%- endif %}
+				font-family: 'Open Sans';
+			}
+
+			#logo {
+				font-family: 'Nunito', 'Ubuntu', sans-serif;
+				margin: 0px;
+			}
+		</style>
+
+		<script>
+			function onload() {}
+		</script>
+
+		{% block base_head %}{% endblock %}
+	</head>
+
+	<body onload="onload()">
+		<header>
+			<h1 style="margin: 4px;"><span id="logo">{% block title %}Sctf{% endblock %}</span>{% block header %}{% endblock %}</h1>
+		</header>
+
+		{%- with messages = get_flashed_messages() %}
+			{%- if messages %}
+
+		{# -#}		<div>
+					{%- for message in messages %}
+			{# -#}			<p>{{ message }}</p>
+					{%- endfor %}
+		{# -#}		</div>
+			{%- endif %}
+		{%- endwith %}
+
+		{% block body %}{% endblock %}
+	</body>
+</html>
+
+<!-- by Sdore, 2019 -->
