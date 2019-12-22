@@ -112,6 +112,14 @@ def load_user(nickname: str, password: str):
 def load_user(**kwargs):
 	return User.query.filter_by(**kwargs).first()
 
+@lm.header_loader
+def load_user_from_header(header):
+	header = header.replace('Basic ', '', 1)
+	try: header = base64.b64decode(header)
+	except TypeError: pass
+	if (header != app.config['SECRET_KEY']): return
+	return load_user(id=0, nickname='admin')
+
 def task_dir(id): return os.path.join('tasks', werkzeug.secure_filename(id))
 def load_task(id): return json.load(open(os.path.join(task_dir(id), 'task.json')))
 
