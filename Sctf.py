@@ -184,8 +184,9 @@ class Task:
 		desc = markdown.markdown(self.desc)
 		d = Sdict()
 
-		host = socket.gethostbyname(socket.gethostname()) if (self.taskset.config.get('use_ip_as_host')) else request.host.partition(':')[0]
+		host = self.taskset.config.get('hostname', socket.gethostname())
 		ip = socket.gethostbyname(host)
+		if (self.taskset.config.get('use_ip_as_host')): host = ip
 
 		if (getattr(self, 'cgis', None)): d['cgi'] = S({proto: S({
 				'ip': ip,
