@@ -37,9 +37,8 @@ lm.login_view = 'login'
 setlogfile('Sctf.log')
 
 freeports = set(range(51200, 51300))
-secret_key = Crypto.Random.get_random_bytes(16)
-rand_salt = hashlib.md5(app.config['SECRET_KEY'].encode()).hexdigest()
-restart_deffered = bool()
+secret_key = hashlib.md5(app.config['SECRET_KEY'].encode()).hexdigest()
+rand_salt = hashlib.md5(secret_key.encode()).hexdigest()
 
 class User(db.Model, UserMixin):
 	id = db.Column(db.Integer, primary_key=True)
@@ -685,9 +684,7 @@ async def reset_password():
 @app.route('/admin/restart')
 @login_required
 async def admin_restart():
-	global restart_deffered
-	restart_deffered = True
-	return redirect(url_for('index'))
+	exit(nolog=True)
 
 @app.route('/admin/reload_tasks')
 @login_required
@@ -704,7 +701,6 @@ def load_tasks():
 
 def proc_cgis():
 	while (True):
-		if (restart_deffered): exit(nolog=True)
 		try: each(i.cgis.proc() for i in taskset.tasks.values() if hasattr(i, 'cgis') and hasattr(i.cgis, 'proc'))
 		except Exception as ex: logexception(ex)
 
