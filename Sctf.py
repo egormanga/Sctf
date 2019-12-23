@@ -90,7 +90,7 @@ def password_hash(nickname, password): return hashlib.sha3_256((nickname+hashlib
 
 def mktoken(data, uid):
 	r = bytes((len(data),))+uid.to_bytes((uid.bit_length()+7)//8, 'big')+data
-	iv = hashlib.md5(secret_key).digest()[-8:] # TODO FIXME
+	iv = hashlib.md5(secret_key.encode()).digest()[-8:] # TODO FIXME
 	return (iv+AES.new(secret_key, AES.MODE_CTR, counter=Crypto.Util.Counter.new(8*12, prefix=b'sCTF', initial_value=int.from_bytes(iv, 'little'))).encrypt(r)).hex()
 
 def parse_token(token):
