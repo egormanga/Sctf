@@ -14,19 +14,24 @@ from wtforms.validators import EqualTo, Required
 from utils.nolog import *
 
 class PrefixedQuart(Quart):
-	def __init__(self, import_name, *args, static_url_path='static', **kwargs):
-		#self.import_name = import_name
-		#self.root_path = self._find_root_path()
-		#application_root = ('/'+self.make_config().from_object('config').get('APPLICATION_ROOT', '').strip('/')).strip('/')
-		application_root = ''
-		super().__init__(import_name, *args, static_url_path=application_root+'/'+static_url_path, **kwargs)
-		if (application_root): self.config['APPLICATION_ROOT'] = application_root
+	def prefix_static(self):
+		if (not self.has_static_folder): return
+		application_root = '/' + (self.config.get('APPLICATION_ROOT') or '').strip('/')
+		if (not application_root.strip('/')): return
+		self.static_url_path = application_root + self.static_url_path
+		static_host = self.url_map.rules[0].host
+		self.url_map = quart.routing.Map(self.url_map.host_matching)
+		self.add_url_rule(
+			f"{self.static_url_path}/<path:filename>", 'static', self.send_static_file,
+			host=static_host,
+		)
 
 	def route(self, path, *args, **kwargs):
 		return super().route((self.config.get('APPLICATION_ROOT') or '')+path, *args, **kwargs)
 
 app = PrefixedQuart(__name__)
 app.config.from_object('config')
+app.prefix_static()
 db = SQLAlchemy(app)
 lm = LoginManager()
 lm.init_app(app)
