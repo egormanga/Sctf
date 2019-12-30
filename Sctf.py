@@ -622,7 +622,7 @@ async def submit_flag():
 		g.user.solved = ','.join(S(g.user.solved.split(',')+[id]).uniquize()).strip(',')
 		db.session.commit()
 		scoreboard_flag.set()
-		r = 'ok!'
+		r = 'Happy New Year!'
 	return Response(r, mimetype='text/plain')
 
 @app.route('/taskdata')
