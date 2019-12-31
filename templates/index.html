@@ -67,7 +67,7 @@
 
 	{% block header -%}
 		<font size="4"> | <a href="{{ url_for('scoreboard') }}">Scoreboard</a> <font size="3">| <a href="{{ url_for('logout') }}">Logout</a></font></font>{#
-		#}<img src="{{ url_for('static', filename='logo_hat.png') }}" style="height: 24px; position: absolute; top: 0; left: 0.36em;">
+		#}<img src="{{ url_for('static', filename='logo_hat.png') }}" style="height: 24px; position: absolute; top: 0; left: 0.36em;{% if g.night %} filter: invert();{% endif %}">
 	{%- endblock %}
 
 	{% block content -%}
