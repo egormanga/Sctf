@@ -3,21 +3,19 @@ body {
 	color: white;
 }
 
-a {
-	filter: invert();
-}
-
 #tasks {
 	column-rule-color: #522719;
 }
+
 .task-popup-background {
 	opacity: 0 !important;
 }
+
 .task-popup {
 	background-color: rgba(0, 0, 0, .2);
 	backdrop-filter: blur(4px);
 }
 
-code, .task-popup-flag-input, .task-popup-flag-submit {
+a, code, .task-popup-flag-input, .task-popup-flag-submit {
 	filter: invert();
 }
