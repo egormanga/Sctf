@@ -7,7 +7,7 @@
 		{# -#}		<link rel="preload" href="{{ url_for('static', filename='fonts/{font}_{charset}.woff2'.format(font=font, charset=charset)) }}" as="font" crossorigin>
 			{%- endfor %}
 		{%- endfor %}
-		<link href="{{ url_for('fonts_css') }}" rel="stylesheet">
+		<link rel="stylesheet" href="{{ url_for('fonts_css') }}">
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -15,12 +15,7 @@
 
 		<style>
 			body {
-				{% if g.night -%}
-					background-color: #111;
-				{# -#}	filter: invert();
-				{%- else -%}
-					background-color: #fafafa;
-				{%- endif %}
+				background-color: #fafafa;
 				font-family: 'Open Sans';
 			}
 
@@ -35,6 +30,8 @@
 		</script>
 
 		{% block base_head %}{% endblock %}
+
+		{% if g.night %}<link rel="stylesheet" href="{{ url_for('static', filename='night.css') }}">{% endif %}
 	</head>
 
 	<body onload="onload()">

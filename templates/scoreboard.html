@@ -2,14 +2,6 @@
 
 	{% block head -%}
 		<style>
-			{% if g.night -%}
-				body {
-				{# -#}	background-color: #111;
-				{# -#}	filter: invert();
-			{# -#}	}
-
-			{% endif -%}
-
 			a {
 				color: black;
 				text-decoration: none;
@@ -35,7 +27,7 @@
 
 	{% block header -%}
 		<font size="4"> | <a href="{{ url_for('index') }}">Tasks</a></font>{#
-		#}<img src="{{ url_for('static', filename='logo_hat.png') }}" style="height: 24px; position: absolute; top: 0; left: 0.36em;{% if g.night %} filter: invert();{% endif %}">
+		#}<img src="{{ url_for('static', filename='logo_hat.png') }}" style="height: 24px; position: absolute; top: 0; left: 0.36em;">
 	{%- endblock %}
 
 	{% block content -%}
