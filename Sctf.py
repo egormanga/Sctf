@@ -230,7 +230,8 @@ class Task:
 		ext = os.path.splitext(srcfilename)[1]
 		outfilename = tempfile.mkstemp(prefix='Sctf_taskdata_', suffix='.'+outext if (outext is not None) else None)[1]
 
-		if (ext == '.c'): cmd = f"""tcc {f'''-DFLAG='"{flag}"' ''' if (flag is not None) else ''}{srcfilename} -o {outfilename}"""
+		if (ext == '.sh'): cmd = f"""FLAG={repr(flag)} {srcfilename} {outfilename}"""
+		elif (ext == '.c'): cmd = f"""tcc {f'''-DFLAG='"{flag}"' ''' if (flag is not None) else ''}{srcfilename} -o {outfilename}"""
 		elif (ext == '.py'): cmd = f"""env {f'''FLAG={repr(flag)} ''' if (flag is not None) else ''}python3 {srcfilename} {outfilename}"""
 		elif (ext == '.go'): cmd = f"""go build {f'''-ldflags "-X main.FLAG={flag}" ''' if (flag is not None) else ''}-o {outfilename} {srcfilename}"""
 		else: raise NotImplementedError(ext)
@@ -422,75 +423,74 @@ class CGIs:
 		for i in os.listdir(os.path.join(task_dir(self.task.id), 'cgi')):
 			self.cgis[i] = subclassdict(CGI)[f"CGI_{i}"](task, self.task.file(os.path.join('cgi', i)))
 
-	def proc(self):
+	async def start(self):
 		for i in self.cgis.values():
-			i.proc()
+			await i.start()
 
 class CGI:
 	__slots__ = ('task',)
 
 class CGI_tcp(CGI):
-	__slots__ = ('executable', 'port', 'socket', 'clients')
+	__slots__ = ('executable', 'port', 'server')
 
 	def __init__(self, task, executable):
 		self.task, self.executable = task, executable
-		while (True):
-			self.port = freeports.pop()
-			try:
-				self.socket = Builder(socket.socket) \
-					.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True) \
-					.bind(('0.0.0.0', self.port)) \
-					.listen() \
-					.setblocking(False) \
-					.build()
-			except OSError: continue
-			else: break
-		self.clients = Slist()
+		self.port = freeports.pop()
 
 	def __del__(self):
-		try: self.socket.close()
+		try: self.server.close()
 		except AttributeError: pass
 		try: freeports.add(self.port)
 		except AttributeError: pass
 
-	def proc(self):
-		try: sock, addr = self.socket.accept()
-		except OSError: pass
+	async def start(self):
+		while (True):
+			try: self.server = await asyncio.start_server(self.handle, '0.0.0.0', self.port)
+			except OSError: pass
+			else: break
+			self.port = freeports.pop()
+
+	@staticmethod
+	async def _transfer(src, dest):
+		while (True):
+			data = await src.read(1024)
+			if (not data): break
+			dest.write(data)
+
+	async def handle(self, reader, writer):
+		sock = writer.get_extra_info('socket')
+		addr = writer.get_extra_info('peername')
+		log(self.task, '+', addr, nolog=True)
+
+		writer.write(b"Enter your token: ")
+		await writer.drain()
+		tok = await reader.readline()
+		proc = None
+
+		try:
+			task_id, uid = parse_token(tok.strip().decode())
+			task_id = task_id.decode()
+			if (task_id != self.task.id): raise ValueError()
+		except Exception:
+			writer.write(b"Invalid token.\n")
+			writer.write_eof()
 		else:
-			sock.setblocking(False)
-			sock.send(b"Enter your token: ")
-			self.clients.append([addr, sock, bytes()])
-			log(self.task, '+', addr, nolog=True)
+			env = os.environ.copy()
+			env['FLAG'] = self.task.flag.get_flag(uid)
+			writer.write(b"\033[A\r\033[K")
+			await writer.drain()
+			sock.setblocking(True)
+			proc = await asyncio.create_subprocess_exec(self.executable, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, env=env)
+			loop = asyncio.get_event_loop()
+			to_proc = loop.create_task(self._transfer(reader, proc.stdin))
+			from_proc = loop.create_task(self._transfer(proc.stdout, writer))
 
-		self.clients.discard()
-		for ii, c in enumerate(self.clients):
-			if (c[1]._closed or isinstance(c[2], subprocess.Popen) and c[2].poll() is not None):
-				try: c[1].setblocking(True)
-				except OSError: pass
-				c[1].close()
-				if (isinstance(c[2], subprocess.Popen)): c[2].kill()
-				self.clients.to_discard(ii)
-				#log('-', c[0])
-				continue
-
-			if (isinstance(c[2], bytes)):
-				try: cs = c[1].recv(1)
-				except OSError: continue
-				if (not cs): c[1].close(); continue
-				c[2] += cs
-				if (c[2][-1:] != b'\n'): continue
-				c[1].setblocking(True)
-				try:
-					task_id, uid = parse_token(c[2].strip().decode())
-					task_id = task_id.decode()
-					if (task_id != self.task.id): raise ValueError()
-				except Exception: c[1].send(b"Invalid token.\n"); c[1].close(); continue
-				env = os.environ.copy()
-				env['FLAG'] = self.task.flag.get_flag(uid)
-				c[1].send(b"\033[A\r\033[K")
-				c[2] = subprocess.Popen(self.executable, stdin=c[1].makefile('rb'), stdout=c[1].makefile('wb'), bufsize=0, env=env)
-
-		self.clients.discard()
+		if (proc is not None):
+			await asyncio.wait_for(proc.wait(), timeout=app.config.get('SUBPROCESS_TIMEOUT', 300))
+			to_proc.cancel()
+			from_proc.cancel()
+		writer.close()
+		#log('-', addr)
 
 class Daemons:
 	__slots__ = ('task', 'daemons')
@@ -622,7 +622,7 @@ async def submit_flag():
 		g.user.solved = ','.join(S(g.user.solved.split(',')+[id]).uniquize()).strip(',')
 		db.session.commit()
 		scoreboard_flag.set()
-		r = 'Happy New Year!'
+		r = 'Success!'
 	return Response(r, mimetype='text/plain')
 
 @app.route('/taskdata')
@@ -697,24 +697,23 @@ async def admin_reload_tasks():
 	if (not g.user.admin): return abort(403)
 	try: load_tasks()
 	except Exception as ex: await flash(f"Error reloading tasks: {ex}.")
-	else: await flash("Tasks reloaded successfully.")
+	else: log("Tasks reloaded."); await flash("Tasks reloaded successfully.")
 	return redirect(url_for('index'))
 
 def load_tasks():
 	global taskset
 	taskset = Taskset()
 
-def proc_cgis():
-	while (True):
-		try: each(i.cgis.proc() for i in taskset.tasks.values() if hasattr(i, 'cgis') and hasattr(i.cgis, 'proc'))
-		except Exception as ex: logexception(ex)
-
 @app.before_first_request
 def init():
 	global scoreboard_flag
 	scoreboard_flag = asyncio.Event()
 	load_tasks()
-	threading.Thread(target=proc_cgis, daemon=True).start()
+	loop = asyncio.get_event_loop()
+	for i in taskset.tasks.values():
+		if (hasattr(i, 'cgis')):
+			loop.create_task(i.cgis.start())
+	#threading.Thread(target=proc_cgis, daemon=True).start()
 
 @apmain
 @aparg('-p', '--port', type=int)
