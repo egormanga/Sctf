@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 # Sctf
 
-import markdown, werkzeug, Crypto.Random, css_html_js_minify
+import pygeoip, markdown, werkzeug, astral.sun, astral.geocoder, css_html_js_minify
+from Crypto.Util import Counter
 from Crypto.Cipher import AES
 import quart; quart.htmlsafe_dumps = None
 import quart.flask_patch
@@ -9,8 +10,9 @@ from quart import *
 from flask_login import UserMixin, LoginManager, login_user, logout_user, current_user, login_required
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
-from wtforms import TextField, BooleanField, PasswordField
+from wtforms import TextField, SelectField, BooleanField, IntegerField, PasswordField
 from wtforms.validators import EqualTo, Required
+from werkzeug.utils import secure_filename
 from utils.nolog import *
 
 class PrefixedQuart(Quart):
@@ -42,13 +44,17 @@ lm.login_view = 'login'
 setlogfile('Sctf.log')
 
 freeports = set(range(*app.config.get('TASK_PORT_RANGE', (51200, 51300))))
-secret_key = hashlib.md5(app.config['SECRET_KEY'].encode()).hexdigest()
-rand_salt = hashlib.md5(secret_key.encode()).hexdigest()
+secret_key = hashlib.md5(app.config['SECRET_KEY'].encode()).hexdigest().encode()
+rand_salt = hashlib.md5(secret_key).hexdigest()
+
+discord_webhook = app.config.get('DISCORD_WEBHOOK')
+if (discord_webhook is not None): discord_texts = app.config['DISCORD_TEXTS']
 
 class User(db.Model, UserMixin):
 	id = db.Column(db.Integer, primary_key=True)
 	nickname = db.Column(db.String(128), index=True, unique=True)
 	email = db.Column(db.String(256), index=True, unique=True)
+	discord_id = db.Column(db.Integer, unique=True)
 	password = db.Column(db.String(64))
 	admin = db.Column(db.Boolean, default=False)
 	solved = db.Column(db.String(1024), default='')
@@ -70,20 +76,39 @@ class LoginForm(FlaskForm):
 class RegisterForm(FlaskForm):
 	nickname = TextField('Nickname', validators=(Required(),))
 	email = TextField('E-Mail', validators=(Required(),))
+	discord_id = IntegerField('Discord id')
 	password = PasswordField('Password', validators=(Required(),))
 	password_repeat = PasswordField('Repeat password', validators=(EqualTo('password'),))
 	remember_me = BooleanField('Remember')
 
+class EditUserForm(FlaskForm):
+	nickname = TextField('Nickname')
+	email = TextField('E-Mail')
+	discord_id = IntegerField('Discord id')
+
+class AdminEditUserForm(FlaskForm):
+	user = SelectField('User', coerce=int)
+	nickname = TextField('Nickname')
+	email = TextField('E-Mail')
+	discord_id = IntegerField('Discord id')
+	admin = BooleanField('Admin')
+
+class AdminDeleteUserForm(FlaskForm):
+	user = SelectField('User', coerce=int)
+
 class AdminPasswordResetForm(FlaskForm):
-	nickname = TextField('Nickname', validators=(Required(),))
+	user = SelectField('User', coerce=int)
 	password = PasswordField('Password', validators=(Required(),))
 	password_repeat = PasswordField('Repeat password', validators=(EqualTo('password'),))
+
+class AdminSubsUserForm(FlaskForm):
+	user = SelectField('User', coerce=int)
 
 @app.before_request
 def before_request():
 	g.taskset = taskset
 	g.user = current_user
-	g.night = is_night()
+	g.night = is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
 	g.builtins, g.operator = builtins, operator
 
 @app.after_request
@@ -95,12 +120,12 @@ def password_hash(nickname, password): return hashlib.sha3_256((nickname+hashlib
 
 def mktoken(data, uid):
 	r = bytes((len(data),))+uid.to_bytes((uid.bit_length()+7)//8, 'big')+data
-	iv = hashlib.md5(secret_key.encode()).digest()[-8:] # TODO FIXME
-	return (iv+AES.new(secret_key, AES.MODE_CTR, counter=Crypto.Util.Counter.new(8*12, prefix=b'sCTF', initial_value=int.from_bytes(iv, 'little'))).encrypt(r)).hex()
+	iv = hashlib.md5(secret_key).digest()[-8:] # TODO FIXME
+	return (iv+AES.new(secret_key, AES.MODE_CTR, counter=Counter.new(8*12, prefix=b'sCTF', initial_value=int.from_bytes(iv, 'little'))).encrypt(r)).hex()
 
 def parse_token(token):
 	token = bytes.fromhex(token)
-	token = AES.new(secret_key, AES.MODE_CTR, counter=Crypto.Util.Counter.new(8*12, prefix=b'sCTF', initial_value=int.from_bytes(token[:8], 'little'))).decrypt(token[8:])
+	token = AES.new(secret_key, AES.MODE_CTR, counter=Counter.new(8*12, prefix=b'sCTF', initial_value=int.from_bytes(token[:8], 'little'))).decrypt(token[8:])
 	return (token[-token[0]:], int.from_bytes(token[1:-token[0]], 'big'))
 
 @dispatch
@@ -116,15 +141,17 @@ def load_user(nickname: str, password: str):
 def load_user(**kwargs):
 	return User.query.filter_by(**kwargs).first()
 
-@lm.header_loader
-def load_user_from_header(header):
-	header = header.replace('Basic ', '', 1)
+@lm.request_loader
+def load_user_from_request(request):
+	header = request.headers.get('Authorization')
+	if (header is None): return None
+	header = header.replace('Basic ', '', 1).strip()
 	try: header = base64.b64decode(header)
 	except TypeError: pass
-	if (header != app.config['SECRET_KEY']): return
+	if (header != app.config['SECRET_KEY'].encode()): return None
 	return load_user(id=0, nickname='admin')
 
-def task_dir(id): return os.path.join('tasks', werkzeug.secure_filename(id))
+def task_dir(id): return os.path.join('tasks', secure_filename(id))
 def load_task(id): return json.load(open(os.path.join(task_dir(id), 'task.json')))
 
 class Taskset:
@@ -135,12 +162,12 @@ class Taskset:
 		self.tasks = {i: Task(self, i, **load_task(i)) for i in os.listdir(os.path.join(path, 'tasks'))}
 
 	@itemget
-	@cachedfunction
+	@lrucachedfunction
 	def cat(self, cat):
 		return [i for i in self.tasks.values() if i.cat == cat]
 
 	@property
-	@cachedfunction
+	@lrucachedfunction
 	def cats(self):
 		return {cat: self.cat[cat] for cat in sorted({i.cat for i in self.tasks.values()})}
 
@@ -184,13 +211,17 @@ class Task:
 	def __repr__(self):
 		return f"<Task '{self.id}' ({self.title})>"
 
+	@lrucachedfunction
+	def compile_markdown(self, src):  # thx to @nickname32
+		return markdown.markdown(src)
+
 	def format_desc(self):
-		desc = markdown.markdown(self.desc)
+		desc = self.compile_markdown(self.desc)
 		d = Sdict()
 
-		host = self.taskset.config.get('hostname', socket.gethostname())
+		host = app.config.get('HOSTNAME', socket.gethostname())
 		ip = socket.gethostbyname(host)
-		if (self.taskset.config.get('use_ip_as_host')): host = ip
+		if (app.config.get('USE_IP_AS_HOST', False)): host = ip
 
 		if (getattr(self, 'cgis', None)): d['cgi'] = S({proto: S({
 				'ip': ip,
@@ -214,28 +245,29 @@ class Task:
 		except Exception as ex: logexception(ex)
 		return desc
 
-	def file(self, file, uid=None):
+	async def file(self, file, uid=None):
 		filename = os.path.join(task_dir(self.id), file)
 
 		if (os.path.islink(filename) and os.path.splitext(os.path.basename(os.path.realpath(filename)))[0] == os.path.splitext(os.path.basename(filename))[0]):
-			return self.compile_src(os.path.realpath(filename), uid, outext=os.path.splitext(file)[1])
+			return await self.compile_src(os.path.realpath(filename), uid, outext=os.path.splitext(file)[1])
 
 		return filename
 
-	@cachedfunction
-	def compile_src(self, srcfilename, uid=None, *, outext=None):
+	@aiocache.cached()
+	async def compile_src(self, srcfilename, uid=None, *, outext=None):
 		if (uid is not None): flag = taskset.tasks[self.id].flag.get_flag(uid)
 		else: flag = None
 
 		ext = os.path.splitext(srcfilename)[1]
-		outfilename = tempfile.mkstemp(prefix='Sctf_taskdata_', suffix='.'+outext if (outext is not None) else None)[1]
+		outfilename = tempfile.mkstemp(prefix='Sctf_taskdata_', suffix=outext if (outext is not None) else None)[1]
 
 		if (ext == '.sh'): cmd = f"""FLAG={repr(flag)} {srcfilename} {outfilename}"""
 		elif (ext == '.c'): cmd = f"""tcc {f'''-DFLAG='"{flag}"' ''' if (flag is not None) else ''}{srcfilename} -o {outfilename}"""
 		elif (ext == '.py'): cmd = f"""env {f'''FLAG={repr(flag)} ''' if (flag is not None) else ''}python3 {srcfilename} {outfilename}"""
 		elif (ext == '.go'): cmd = f"""go build {f'''-ldflags "-X main.FLAG={flag}" ''' if (flag is not None) else ''}-o {outfilename} {srcfilename}"""
 		else: raise NotImplementedError(ext)
-		assert (os.system(cmd) == 0)
+		p = await asyncio.create_subprocess_shell(cmd)
+		assert (await p.wait() == 0)
 
 		return outfilename
 
@@ -420,12 +452,11 @@ class CGIs:
 	def __init__(self, task):
 		self.task = task
 		self.cgis = dict()
-		for i in os.listdir(os.path.join(task_dir(self.task.id), 'cgi')):
-			self.cgis[i] = subclassdict(CGI)[f"CGI_{i}"](task, self.task.file(os.path.join('cgi', i)))
 
 	async def start(self):
-		for i in self.cgis.values():
-			await i.start()
+		for i in os.listdir(os.path.join(task_dir(self.task.id), 'cgi')):
+			self.cgis[i] = subclassdict(CGI)[f"CGI_{i}"](self.task, await self.task.file(os.path.join('cgi', i)))
+			await self.cgis[i].start()
 
 class CGI:
 	__slots__ = ('task',)
@@ -453,12 +484,12 @@ class CGI_tcp(CGI):
 	@staticmethod
 	async def _transfer(src, dest):
 		while (True):
-			data = await src.read(1024)
+			data = await src.read(4096)
 			if (not data): break
 			dest.write(data)
 
 	async def handle(self, reader, writer):
-		sock = writer.get_extra_info('socket')
+		#sock = writer.get_extra_info('socket')
 		addr = writer.get_extra_info('peername')
 		log(self.task, '+', addr, nolog=True)
 
@@ -479,8 +510,8 @@ class CGI_tcp(CGI):
 			env['FLAG'] = self.task.flag.get_flag(uid)
 			writer.write(b"\033[A\r\033[K")
 			await writer.drain()
-			sock.setblocking(True)
-			proc = await asyncio.create_subprocess_exec(self.executable, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, env=env)
+			#sock.setblocking(True)
+			proc = await asyncio.create_subprocess_exec(os.path.abspath(self.executable), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, cwd=os.path.dirname(self.executable), env=env)
 			loop = asyncio.get_event_loop()
 			to_proc = loop.create_task(self._transfer(reader, proc.stdin))
 			from_proc = loop.create_task(self._transfer(proc.stdout, writer))
@@ -490,7 +521,7 @@ class CGI_tcp(CGI):
 			to_proc.cancel()
 			from_proc.cancel()
 		writer.close()
-		#log('-', addr)
+		log(self.task, '-', addr, nolog=True)
 
 class Daemons:
 	__slots__ = ('task', 'daemons')
@@ -508,7 +539,7 @@ class Daemon:
 	def __init__(self, task, executable):
 		self.task = task
 		self.env = self.get_env()
-		self.process = subprocess.Popen(executable, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, env=self.env)
+		self.process = subprocess.Popen(os.path.abspath(executable), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, cwd=os.path.dirname(executable), env=self.env)
 
 	def __del__(self):
 		try: self.process.kill()
@@ -543,9 +574,16 @@ class Daemon_tcp(Daemon):
 
 		return env
 
-def is_night(): return time.localtime().tm_hour in range(8)
+@lrucachedfunction
+def _geoip(ip):
+	rec = pygeoip.GeoIP('/usr/share/GeoIP/GeoIPCity.dat').record_by_addr(ip)
+	return (rec['latitude'], rec['longitude'])
 
-### XXX ###
+def is_night(ip=None):
+	try: observer = astral.Observer(*_geoip(ip))
+	except Exception: observer = astral.geocoder.lookup('Moscow', astral.geocoder.database()).observer
+	start, end = astral.sun.night(observer)
+	return (start <= datetime.datetime.now(start.tzinfo) < end)
 
 @app.route('/')
 @login_required
@@ -555,6 +593,10 @@ async def index():
 @app.route('/fonts.css')
 async def fonts_css():
 	return Response(await render_template('fonts.css'), mimetype='text/css')
+
+@app.route('/about')
+async def about():
+	return Response(await render_template('about.html'), mimetype='text/html')
 
 @app.route('/login', methods=('GET', 'POST'))
 async def login():
@@ -574,6 +616,7 @@ async def login():
 @app.route('/register', methods=('GET', 'POST'))
 async def register():
 	if (g.user and g.user.is_authenticated): return redirect(request.args.get('url') or url_for('index'))
+	if (not taskset.config.get('registration_opened', True)): return "Registration is currently closed."
 	form = RegisterForm()
 	if (form.validate_on_submit()):
 		usern = load_user(nickname=form.nickname.data)
@@ -615,13 +658,30 @@ async def submit_flag():
 	flag = request.args.get('flag')
 	task = taskset.tasks[id]
 	log(f"Got flag from {g.user} for {task}: '{flag}'")
-	if (taskset.config.get('contest_ended')): r = "The contest is ended."
+	if (taskset.config.get('contest_ended')): r = "The contest is over."
 	elif (not re.match(r'^%s{.*}$' % taskset.flag_prefix, flag)): r = "This is not a flag. Flag format is: «%s{...}»" % taskset.flag_prefix
-	elif (not taskset.tasks[id].flag.validate_flag(g.user.id, flag.strip())): r = 'wrong'
+	elif (not task.flag.validate_flag(g.user.id, flag.strip())): r = 'Wrong'
 	else:
 		g.user.solved = ','.join(S(g.user.solved.split(',')+[id]).uniquize()).strip(',')
 		db.session.commit()
 		scoreboard_flag.set()
+		if (not g.user.admin and discord_webhook is not None):
+			try: r = requests.post(discord_webhook, json={
+				'content': random.choice(discord_texts).format(f'<@{g.user.discord_id}>' if (g.user.discord_id) else g.user.nickname),
+				'embeds': [{
+					'title': task.title,
+					'description': f"[{task.cost}]\n(solved by {len(task.solved_by)})",
+					'url': f"http{'s'*(not app.config.get('NO_HTTPS', False))}://{socket.gethostbyname(host) if (app.config.get('USE_IP_AS_HOST', False)) else app.config.get('HOSTNAME', socket.gethostname())}"+url_for('index', _anchor=task.id),
+					'color': 32767,
+				}],
+				**({
+					'nickname': 'ЖУЖ',
+					'avatar_url': "https://w0.pngwave.com/png/308/965/honey-bee-bizzy-b-s-tumblebus-tumble-bus-triple-crown-drive-bee-emoji-png-clip-art.png",
+				} if (random.random() < .001) else {}),
+			}).text
+			except Exception as ex: logexception(ex)
+			else:
+				if (r): logexception(WTFException(r))
 		r = 'Success!'
 	return Response(r, mimetype='text/plain')
 
@@ -639,7 +699,7 @@ async def taskdata():
 
 	task = taskset.tasks[id]
 
-	filename = task.file(os.path.join('files', werkzeug.secure_filename(file)), uid)
+	filename = await task.file(os.path.join('files', secure_filename(file)), uid)
 
 	# Flask-like send_file():
 
@@ -647,7 +707,9 @@ async def taskdata():
 	headers['Content-Disposition'] = f"attachment; filename={file}"
 	headers['Content-Length'] = str(os.path.getsize(filename))
 
-	async with quart.static.async_open(filename, 'rb') as f:
+	#async with quart.static.async_open(filename, 'rb') as f:
+	#	data = await f.read()
+	async with aiofiles.open(filename, 'rb') as f:
 		data = await f.read()
 
 	return Response(data, mimetype=mimetypes.guess_type(os.path.basename(filename))[0] or quart.static.DEFAULT_MIMETYPE, headers=headers)
@@ -672,13 +734,46 @@ async def lp_scoreboard():
 	scoreboard_flag.clear()
 	return str(int(await scoreboard_flag.wait()))
 
+@app.route('/admin/edit_user', methods=('GET', 'POST'))
+@login_required
+async def admin_edit_user():
+	if (not g.user.admin): return abort(403)
+	form = AdminEditUserForm()
+	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
+	if (form.validate_on_submit()):
+		user = load_user(form.user.data)
+		if (form.nickname.data): user.nickname = form.nickname.data
+		if (form.email.data): user.email = form.email.data
+		if (form.discord_id.data): user.discord_id = form.discord_id.data
+		#if (form.admin): user.admin = form.admin.data # TODO FIXME fill form
+		db.session.add(user)
+		db.session.commit()
+		await flash(f"[Admin] {user} saved.")
+		return redirect(url_for('index'))
+	return await render_template('admin/edit_user.html', form=form)
+
+@app.route('/admin/delete_user', methods=('GET', 'POST'))
+@login_required
+async def admin_delete_user():
+	if (not g.user.admin): return abort(403)
+	form = AdminDeleteUserForm()
+	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
+	if (form.validate_on_submit()):
+		user = load_user(form.user.data)
+		db.session.delete(user)
+		db.session.commit()
+		await flash(f"[Admin] {user} deleted.")
+		return redirect(url_for('index'))
+	return await render_template('admin/delete_user.html', form=form)
+
 @app.route('/admin/reset_password', methods=('GET', 'POST'))
 @login_required
-async def reset_password():
+async def admin_reset_password():
 	if (not g.user.admin): return abort(403)
 	form = AdminPasswordResetForm()
+	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
 	if (form.validate_on_submit()):
-		user = load_user(nickname=form.nickname.data)
+		user = load_user(form.user.data)
 		user.password = password_hash(user.nickname, form.password.data)
 		db.session.add(user)
 		db.session.commit()
@@ -686,10 +781,35 @@ async def reset_password():
 		return redirect(url_for('index'))
 	return await render_template('admin/reset_password.html', form=form)
 
+@app.route('/admin/subs_user', methods=('GET', 'POST'))
+@login_required
+async def admin_subs_user():
+	if (not g.user.admin): return abort(403)
+	form = AdminSubsUserForm()
+	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
+	if (form.validate_on_submit()):
+		user = load_user(form.user.data)
+		login_user(user)
+		await flash(f"[Admin] Now logged in as {user}")
+		return redirect(url_for('index'))
+	return await render_template('admin/subs_user.html', form=form)
+
+@app.route('/admin/get_flag')
+@login_required
+async def admin_get_flag():
+	if (not g.user.admin): return abort(403)
+	id = request.args.get('id')
+	uid = request.args.get('uid')
+	task = taskset.tasks[id]
+	return task.flag.get_flag(uid)
+
 @app.route('/admin/restart')
 @login_required
 async def admin_restart():
-	exit(nolog=True)
+	if (not g.user.admin): return abort(403)
+	loop = asyncio.get_event_loop()
+	loop.call_later(1, lambda: exit(nolog=True))
+	return redirect(request.referrer or url_for('index'))
 
 @app.route('/admin/reload_tasks')
 @login_required
@@ -698,7 +818,7 @@ async def admin_reload_tasks():
 	try: load_tasks()
 	except Exception as ex: await flash(f"Error reloading tasks: {ex}.")
 	else: log("Tasks reloaded."); await flash("Tasks reloaded successfully.")
-	return redirect(url_for('index'))
+	return redirect(request.referrer or url_for('index'))
 
 def load_tasks():
 	global taskset
@@ -708,12 +828,13 @@ def load_tasks():
 def init():
 	global scoreboard_flag
 	scoreboard_flag = asyncio.Event()
+	for i in glob.iglob('/tmp/Sctf_taskdata_*'):
+		os.remove(i)
 	load_tasks()
 	loop = asyncio.get_event_loop()
 	for i in taskset.tasks.values():
 		if (hasattr(i, 'cgis')):
 			loop.create_task(i.cgis.start())
-	#threading.Thread(target=proc_cgis, daemon=True).start()
 
 @apmain
 @aparg('-p', '--port', type=int)
@@ -725,4 +846,4 @@ def main(cargs):
 
 if (__name__ == '__main__'): exit(main(nolog=True), nolog=True)
 
-# by Sdore, 2019
+# by Sdore, 2021

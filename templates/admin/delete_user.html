@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 	{% block title -%}
-		[Admin] Reset password
+		[Admin] Delete user
 	{%- endblock %}
 
 	{% block body -%}
@@ -19,8 +19,6 @@
 		<form action="" method="post">
 			{{ form.hidden_tag() }}
 			<p>{{ form.user(placeholder=form.user.label.text) }}</p>
-			<p>{{ form.password(placeholder=form.password.label.text) }}</p>
-			<p>{{ form.password_repeat(placeholder=form.password_repeat.label.text) }}</p>
-			<p><input type="submit" value="Save"></p>
+			<p><input type="submit" value="Delete" style="color: red;"></p>
 		</form>
 	{%- endblock %}

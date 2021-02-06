@@ -14,7 +14,7 @@
 	{%- endblock %}
 
 	{% block title -%}
-		User <code style="color: initial;">{{ u.nickname }}</code> {% if u.admin %}<span title="admin">&star;</span>{% endif %}
+		User {% if g.user.admin %}#{{ u.id }} {% endif %}<code style="color: initial;">{{ u.nickname }}</code> {% if u.admin %}<span title="admin">&star;</span>{% endif %}
 	{%- endblock %}
 
 	{% block header -%}
@@ -24,6 +24,7 @@
 	{% block content -%}
 		{% if g.user.admin -%}
 			<h2>E-mail: {{ u.email }}</h2>
+			{% if u.discord_id %}<h2>Discord id: {{ u.discord_id }}</h2>{% endif %}
 		{%- endif %}
 		<h2>Score: {{ u.score }}</h2>
 		<b>Solved tasks:</b>
