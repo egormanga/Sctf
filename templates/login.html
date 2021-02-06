@@ -5,7 +5,7 @@
 	{%- endblock %}
 
 	{% block header -%}
-		<font size="4"> | <a href="{{ url_for('register') }}">Register</a> | <a href="{{ url_for('scoreboard') }}">Scoreboard</a></font>
+		<font size="4"> {% if g.taskset.config.get('registration_opened', True) -%} | <a href="{{ url_for('register') }}">Register</a> {%- endif %} {% if g.user.is_authenticated or g.taskset.config.get('public_scoreboard', True) -%} | <a href="{{ url_for('scoreboard') }}">Scoreboard</a> {%- endif -%} </font>
 	{%- endblock %}
 
 	{% block body -%}

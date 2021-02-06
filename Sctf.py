@@ -716,6 +716,7 @@ async def taskdata():
 
 @app.route('/scoreboard')
 async def scoreboard():
+	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return "Scoreboard is not public visible."
 	scoreboard = enumerate(sorted({i: i.score for i in User.query.filter_by(admin=False).all()}.items(), key=operator.itemgetter(1), reverse=True))
 	return await render_template('scoreboard.html', scoreboard=scoreboard)
 
