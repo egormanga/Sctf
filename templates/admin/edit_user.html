@@ -5,24 +5,13 @@
 	{%- endblock %}
 
 	{% block body -%}
-		{%- with messages = get_flashed_messages() %}
-			{%- if messages %}
-
-		{# -#}		<div>
-					{%- for message in messages %}
-			{# -#}			<p>{{ message }}</p>
-					{%- endfor %}
-		{# -#}		</div>
-			{%- endif %}
-		{%- endwith %}
-
 		<form action="" method="post">
 			{{ form.hidden_tag() }}
-			<p>{{ form.user(placeholder=form.user.label.text) }}</p>
+			<p>{{ form.user(placeholder=form.user.label.text, onchange="document.location.search = 'user='+this.value") }}</p>
 			<p>{{ form.nickname(placeholder=form.nickname.label.text) }}</p>
 			<p>{{ form.email(placeholder=form.email.label.text) }}</p>
 			<p>{{ form.discord_id(placeholder=form.discord_id.label.text) }}</p>
-			<p>{{ form.admin(placeholder=form.admin.label.text) }}</p>
+			<p>{{ form.admin.label.text }} {{ form.admin() }}</p>
 			<p><input type="submit" value="Save"></p>
 		</form>
 	{%- endblock %}

@@ -23,6 +23,13 @@
 
 	{% block content -%}
 		{% if g.user.admin -%}
+			<ul>
+				<li><a href="{{ url_for('admin_edit_user', user=u.id) }}">[Admin] Edit</a></li>
+				<li><a href="{{ url_for('admin_delete_user', user=u.id) }}">[Admin] Delete</a></li>
+				<li><a href="{{ url_for('admin_reset_password', user=u.id) }}">[Admin] Reset password</a></li>
+				<li><a href="{{ url_for('admin_get_flag', task='', user=u.id) }}">[Admin] Get flag for this user</a></li>
+				<li><a href="{{ url_for('admin_subs_user', user=u.id) }}">[Admin] Log in as this user</a></li>
+			</ul>
 			<h2>E-mail: {{ u.email }}</h2>
 			{% if u.discord_id %}<h2>Discord id: {{ u.discord_id }}</h2>{% endif %}
 		{%- endif %}

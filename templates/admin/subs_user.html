@@ -5,20 +5,9 @@
 	{%- endblock %}
 
 	{% block body -%}
-		{%- with messages = get_flashed_messages() %}
-			{%- if messages %}
-
-		{# -#}		<div>
-					{%- for message in messages %}
-			{# -#}			<p>{{ message }}</p>
-					{%- endfor %}
-		{# -#}		</div>
-			{%- endif %}
-		{%- endwith %}
-
 		<form action="" method="post">
 			{{ form.hidden_tag() }}
 			<p>{{ form.user(placeholder=form.user.label.text) }}</p>
-			<p><input type="submit" value="Subs" style="color: green;"></p>
+			<p><input type="submit" value="Log in" style="color: green;"></p>
 		</form>
 	{%- endblock %}

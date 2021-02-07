@@ -11,7 +11,7 @@ from flask_login import UserMixin, LoginManager, login_user, logout_user, curren
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from wtforms import TextField, SelectField, BooleanField, IntegerField, PasswordField
-from wtforms.validators import EqualTo, Required
+from wtforms.validators import Email, EqualTo, Required
 from werkzeug.utils import secure_filename
 from utils.nolog import *
 
@@ -55,9 +55,9 @@ class User(db.Model, UserMixin):
 	nickname = db.Column(db.String(128), index=True, unique=True)
 	email = db.Column(db.String(256), index=True, unique=True)
 	discord_id = db.Column(db.Integer, unique=True)
-	password = db.Column(db.String(64))
-	admin = db.Column(db.Boolean, default=False)
-	solved = db.Column(db.String(1024), default='')
+	password = db.Column(db.String(64), nullable=False)
+	admin = db.Column(db.Boolean, nullable=False, default=False)
+	solved = db.Column(db.String(1024), nullable=False, default='')
 
 	def __repr__(self): return f"<User #{self.id} ({self.nickname})>"
 
@@ -69,27 +69,37 @@ db.create_all()
 db.session.commit()
 
 class LoginForm(FlaskForm):
-	login = TextField('Login', validators=(Required(),))
-	password = PasswordField('Password', validators=(Required(),))
+	login = TextField('Login', validators=[Required("Login is required.")])
+	password = PasswordField('Password', validators=[Required("Password is required.")])
 	remember_me = BooleanField('Remember')
 
 class RegisterForm(FlaskForm):
-	nickname = TextField('Nickname', validators=(Required(),))
-	email = TextField('E-Mail', validators=(Required(),))
+	nickname = TextField('Nickname', validators=[Required("Nickname is required.")])
+	email = TextField('E-Mail', validators=[Required("E-Mail is required."), Email("E-Mail must be valid.")])
 	discord_id = IntegerField('Discord id')
-	password = PasswordField('Password', validators=(Required(),))
-	password_repeat = PasswordField('Repeat password', validators=(EqualTo('password'),))
+	password = PasswordField('Password', validators=[Required("Password is required.")])
+	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
 	remember_me = BooleanField('Remember')
 
 class EditUserForm(FlaskForm):
 	nickname = TextField('Nickname')
-	email = TextField('E-Mail')
+	email = TextField('E-Mail', validators=[Email("E-Mail must be valid.")])
 	discord_id = IntegerField('Discord id')
+
+class ChangePasswordForm(FlaskForm):
+	current_password = PasswordField('Current password', validators=[Required("Password is required.")])
+	new_password = PasswordField('New password', validators=[Required("New password is required.")])
+	new_password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('new_password', "Passwords must match.")])
+
+class AdminCreateUserForm(EditUserForm):
+	password = PasswordField('Password', validators=[Required("Password is required.")])
+	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
+	admin = BooleanField('Admin')
 
 class AdminEditUserForm(FlaskForm):
 	user = SelectField('User', coerce=int)
 	nickname = TextField('Nickname')
-	email = TextField('E-Mail')
+	email = TextField('E-Mail', validators=[Email("E-Mail must be valid if specified.")])
 	discord_id = IntegerField('Discord id')
 	admin = BooleanField('Admin')
 
@@ -98,11 +108,19 @@ class AdminDeleteUserForm(FlaskForm):
 
 class AdminPasswordResetForm(FlaskForm):
 	user = SelectField('User', coerce=int)
-	password = PasswordField('Password', validators=(Required(),))
-	password_repeat = PasswordField('Repeat password', validators=(EqualTo('password'),))
+	password = PasswordField('Password', validators=[Required("Password is required.")])
+	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
 
 class AdminSubsUserForm(FlaskForm):
 	user = SelectField('User', coerce=int)
+
+async def validate_form(form):
+	res = form.validate_on_submit()
+	for field, errors in form.errors.items():
+		for error in errors:
+			#await flash(f"Error in field «{form[field].label.text}»: {error}")
+			await flash(f"Error: {error}")
+	return res
 
 @app.before_request
 def before_request():
@@ -118,15 +136,14 @@ def after_request(r):
 
 def password_hash(nickname, password): return hashlib.sha3_256((nickname+hashlib.md5((nickname+password).encode()).hexdigest()+password).encode()).hexdigest()
 
-def mktoken(data, uid):
-	r = bytes((len(data),))+uid.to_bytes((uid.bit_length()+7)//8, 'big')+data
-	iv = hashlib.md5(secret_key).digest()[-8:] # TODO FIXME
-	return (iv+AES.new(secret_key, AES.MODE_CTR, counter=Counter.new(8*12, prefix=b'sCTF', initial_value=int.from_bytes(iv, 'little'))).encrypt(r)).hex()
+def mktoken(uid, data):
+	uid = VarInt.pack(uid)
+	return uid.hex()+hashlib.md5(data+hashlib.md5(secret_key).digest()+uid).hexdigest()
 
-def parse_token(token):
-	token = bytes.fromhex(token)
-	token = AES.new(secret_key, AES.MODE_CTR, counter=Counter.new(8*12, prefix=b'sCTF', initial_value=int.from_bytes(token[:8], 'little'))).decrypt(token[8:])
-	return (token[-token[0]:], int.from_bytes(token[1:-token[0]], 'big'))
+def check_token(token, data):
+	uid = VarInt.read(io.BytesIO(token))
+	if (token != mktoken(uid, data)): return None
+	return uid
 
 @dispatch
 @lm.user_loader
@@ -134,7 +151,7 @@ def load_user(id: int):
 	return User.query.filter_by(id=id).first()
 
 @dispatch
-def load_user(nickname: str, password: str):
+def load_user(*, nickname: str, password: str):
 	return User.query.filter_by(nickname=nickname, password=password_hash(nickname, password)).first()
 
 @dispatch
@@ -192,12 +209,15 @@ class Task:
 			cost = self.taskset.default.cost & cost
 			self.scoring = allsubclassdict(Scoring)[f"Scoring_{cost['dynamic']}"](self, **cost)
 
+		try: flag = flag['static']
+		except (TypeError, KeyError): pass
+
 		if (isinstance(flag, str)):
 			self.flag = Flag(flag)
 			assert (re.match(r'%s{.*}' % self.taskset.flag_prefix, self.flag.flag))
 		else:
 			if (flag == 'default'): flag = {}
-			flag = self.taskset.default.flag & flag
+			flag = (self.taskset.default.flag & flag)
 			self.flag = allsubclassdict(Flag)[f"Flag_{flag['dynamic']}"](self, **flag)
 
 		self.desc = markdown.markdown(open(os.path.join(task_dir(id), 'task.md')).read())
@@ -227,7 +247,7 @@ class Task:
 				'ip': ip,
 				'host': host,
 				'port': cgi.port,
-				'token': mktoken(self.id.encode(), g.user.id),
+				'token': mktoken(g.user.id, self.id.encode()),
 			}) for proto, cgi in self.cgis.cgis.items()})
 
 		if (getattr(self, 'daemons', None)): d['daemon'] = S({proto: S({
@@ -298,7 +318,7 @@ class Flag:
 		except AttributeError: return None
 
 	def validate_flag(self, uid, flag):
-		return flag == self.get_flag(uid)
+		return (flag == self.get_flag(uid))
 
 class Flag_dynamic(Flag):
 	__slots__ = ('task',)
@@ -495,14 +515,11 @@ class CGI_tcp(CGI):
 
 		writer.write(b"Enter your token: ")
 		await writer.drain()
-		tok = await reader.readline()
+		token = await reader.readline()
 		proc = None
 
-		try:
-			task_id, uid = parse_token(tok.strip().decode())
-			task_id = task_id.decode()
-			if (task_id != self.task.id): raise ValueError()
-		except Exception:
+		uid = check_token(token.strip(), self.task.id.encode())
+		if (uid is None):
 			writer.write(b"Invalid token.\n")
 			writer.write_eof()
 		else:
@@ -603,41 +620,63 @@ async def login():
 	if (g.user and g.user.is_authenticated):
 		next = request.args.get('url')
 		return redirect(next or url_for('index'))
+
 	form = LoginForm()
-	if (form.validate_on_submit()):
-		user = load_user(form.login.data, form.password.data)
+	if (await validate_form(form)):
+		user = load_user(nickname=form.login.data, password=form.password.data)
 		if (not user):
 			await flash("Incorrect login or password.")
 			return redirect(url_for('login'))
 		login_user(user, form.remember_me.data)
 		return redirect(url_for('login'))
+
 	return await render_template('login.html', form=form)
 
 @app.route('/register', methods=('GET', 'POST'))
 async def register():
 	if (g.user and g.user.is_authenticated): return redirect(request.args.get('url') or url_for('index'))
 	if (not taskset.config.get('registration_opened', True)): return "Registration is currently closed."
+
 	form = RegisterForm()
-	if (form.validate_on_submit()):
+	if (await validate_form(form)):
 		usern = load_user(nickname=form.nickname.data)
 		usere = load_user(email=form.email.data)
 		if (usern or usere):
 			await flash(f"Пользователь с таким {'ником' if (usern) else 'e-mail'} уже существует.")
 			return redirect(url_for('register'))
 		else:
-			user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.nickname.data, form.password.data))
+			user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.nickname.data, form.password.data), discord_id=form.discord_id.data)
 			db.session.add(user)
 			db.session.commit()
 			log(f"User registered: {user}")
 			login_user(user, form.remember_me.data)
 			scoreboard_flag.set()
 			return redirect(url_for('login'))
+
 	return await render_template('register.html', form=form)
 
 @app.route('/logout')
 async def logout():
 	logout_user()
 	return redirect(url_for('index'))
+
+@app.route('/change_password', methods=('GET', 'POST'))
+@login_required
+async def change_password():
+	form = ChangePasswordForm()
+
+	if (await validate_form(form)):
+		if (password_hash(g.user.nickname, form.current_password.data) != g.user.password):
+			await flash("Current password is wrong.")
+			return redirect(url_for('change_password'))
+
+		g.user.password = password_hash(g.user.nickname, form.new_password.data)
+		db.session.commit()
+
+		await flash("Password changed successfully.")
+		return redirect(url_for('index'))
+
+	return await render_template('change_password.html', form=form)
 
 @app.route('/tasks.json')
 @login_required
@@ -648,7 +687,7 @@ async def tasks_json():
 		'cost': str(i.scoring),
 		'desc': i.format_desc(),
 		'solved': len(i.solved_by),
-		'files': [(name, mktoken(hashlib.md5(os.path.abspath(os.path.join(task_dir(i.id), 'files', name)).encode()).digest(), g.user.id)) for name in i.files],
+		'files': [(name, mktoken(g.user.id, hashlib.md5(os.path.abspath(os.path.join(task_dir(i.id), 'files', name)).encode()).digest())) for name in i.files],
 	} for i in taskset.tasks.values()}, ensure_ascii=False, separators=',:'), mimetype='application/json')
 
 @app.route('/submit_flag')
@@ -657,7 +696,9 @@ async def submit_flag():
 	id = request.args.get('id')
 	flag = request.args.get('flag')
 	task = taskset.tasks[id]
+
 	log(f"Got flag from {g.user} for {task}: '{flag}'")
+
 	if (taskset.config.get('contest_ended')): r = "The contest is over."
 	elif (not re.match(r'^%s{.*}$' % taskset.flag_prefix, flag)): r = "This is not a flag. Flag format is: «%s{...}»" % taskset.flag_prefix
 	elif (not task.flag.validate_flag(g.user.id, flag.strip())): r = 'Wrong'
@@ -665,6 +706,7 @@ async def submit_flag():
 		g.user.solved = ','.join(S(g.user.solved.split(',')+[id]).uniquize()).strip(',')
 		db.session.commit()
 		scoreboard_flag.set()
+
 		if (not g.user.admin and discord_webhook is not None):
 			try: r = requests.post(discord_webhook, json={
 				'content': random.choice(discord_texts).format(f'<@{g.user.discord_id}>' if (g.user.discord_id) else g.user.nickname),
@@ -682,7 +724,9 @@ async def submit_flag():
 			except Exception as ex: logexception(ex)
 			else:
 				if (r): logexception(WTFException(r))
+
 		r = 'Success!'
+
 	return Response(r, mimetype='text/plain')
 
 @app.route('/taskdata')
@@ -692,10 +736,8 @@ async def taskdata():
 	token = request.args.get('token')
 	filename = os.path.join(os.path.join(task_dir(id), 'files'), file)
 
-	try:
-		ofn, uid = parse_token(token)
-		if (ofn != hashlib.md5(os.path.abspath(filename).encode()).digest()): raise ValueError()
-	except Exception: return abort(403)
+	uid = check_token(token, hashlib.md5(os.path.abspath(filename).encode()).digest())
+	if (uid is None): return abort(403)
 
 	task = taskset.tasks[id]
 
@@ -717,10 +759,12 @@ async def taskdata():
 @app.route('/scoreboard')
 async def scoreboard():
 	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return "Scoreboard is not public visible."
+
 	scoreboard = enumerate(sorted({i: i.score for i in User.query.filter_by(admin=False).all()}.items(), key=operator.itemgetter(1), reverse=True))
 	return await render_template('scoreboard.html', scoreboard=scoreboard)
 
 @app.route('/user/<nickname>')
+@login_required
 async def user(nickname):
 	u = load_user(nickname=nickname)
 	if (u is None): return abort(404)
@@ -735,90 +779,165 @@ async def lp_scoreboard():
 	scoreboard_flag.clear()
 	return str(int(await scoreboard_flag.wait()))
 
+@app.route('/admin')
+@login_required
+async def admin():
+	if (not g.user.admin): return abort(403)
+	return await render_template('admin.html')
+
+@app.route('/admin/create_user', methods=('GET', 'POST'))
+@login_required
+async def admin_create_user():
+	if (not g.user.admin): return abort(403)
+
+	form = AdminCreateUserForm()
+
+	if (await validate_form(form)):
+		user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.nickname.data, form.password.data), discord_id=form.discord_id.data, admin=form.admin.data)
+
+		db.session.add(user)
+		db.session.commit()
+
+		await flash(f"[Admin] {user} added.")
+		return redirect(url_for('user', nickname=user.nickname))
+
+	return await render_template('admin/create_user.html', form=form)
+
 @app.route('/admin/edit_user', methods=('GET', 'POST'))
 @login_required
 async def admin_edit_user():
 	if (not g.user.admin): return abort(403)
+
 	form = AdminEditUserForm()
 	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
-	if (form.validate_on_submit()):
-		user = load_user(form.user.data)
-		if (form.nickname.data): user.nickname = form.nickname.data
-		if (form.email.data): user.email = form.email.data
-		if (form.discord_id.data): user.discord_id = form.discord_id.data
-		#if (form.admin): user.admin = form.admin.data # TODO FIXME fill form
+
+	if (await validate_form(form)):
+		user = load_user(id=form.user.data)
+
+		user.nickname = form.nickname.data
+		user.email = form.email.data
+		user.discord_id = form.discord_id.data
+		user.admin = form.admin.data
+
 		db.session.add(user)
 		db.session.commit()
+
 		await flash(f"[Admin] {user} saved.")
-		return redirect(url_for('index'))
+		return redirect(url_for('user', nickname=user.nickname))
+
+	try: user = load_user(id=int(request.args.get('user'))) or raise_(KeyError)
+	except Exception: pass
+	else:
+		form.user.data = user.id
+		form.nickname.data = user.nickname
+		form.email.data = user.email
+		form.discord_id.data = user.discord_id
+		form.admin.data = user.admin
+
 	return await render_template('admin/edit_user.html', form=form)
 
 @app.route('/admin/delete_user', methods=('GET', 'POST'))
 @login_required
 async def admin_delete_user():
 	if (not g.user.admin): return abort(403)
+
 	form = AdminDeleteUserForm()
 	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
-	if (form.validate_on_submit()):
-		user = load_user(form.user.data)
+
+	if (await validate_form(form)):
+		user = load_user(id=form.user.data)
+
 		db.session.delete(user)
 		db.session.commit()
+
 		await flash(f"[Admin] {user} deleted.")
 		return redirect(url_for('index'))
+
+	try: user = load_user(id=int(request.args.get('user'))) or raise_(KeyError)
+	except Exception: pass
+	else: form.user.data = user.id
+
 	return await render_template('admin/delete_user.html', form=form)
 
 @app.route('/admin/reset_password', methods=('GET', 'POST'))
 @login_required
 async def admin_reset_password():
 	if (not g.user.admin): return abort(403)
+
 	form = AdminPasswordResetForm()
 	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
-	if (form.validate_on_submit()):
-		user = load_user(form.user.data)
+
+	if (await validate_form(form)):
+		user = load_user(id=form.user.data)
+
 		user.password = password_hash(user.nickname, form.password.data)
+
 		db.session.add(user)
 		db.session.commit()
+
 		await flash("[Admin] Password saved.")
 		return redirect(url_for('index'))
+
+	try: user = load_user(id=int(request.args.get('user'))) or raise_(KeyError)
+	except Exception: pass
+	else: form.user.data = user.id
+
 	return await render_template('admin/reset_password.html', form=form)
 
 @app.route('/admin/subs_user', methods=('GET', 'POST'))
 @login_required
 async def admin_subs_user():
 	if (not g.user.admin): return abort(403)
+
 	form = AdminSubsUserForm()
 	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
-	if (form.validate_on_submit()):
-		user = load_user(form.user.data)
+
+	if (await validate_form(form)):
+		user = load_user(id=form.user.data)
 		login_user(user)
+
 		await flash(f"[Admin] Now logged in as {user}")
 		return redirect(url_for('index'))
+
+	try: user = load_user(id=int(request.args.get('user'))) or raise_(KeyError)
+	except Exception: pass
+	else: form.user.data = user.id
+
 	return await render_template('admin/subs_user.html', form=form)
 
 @app.route('/admin/get_flag')
 @login_required
 async def admin_get_flag():
 	if (not g.user.admin): return abort(403)
-	id = request.args.get('id')
-	uid = request.args.get('uid')
-	task = taskset.tasks[id]
-	return task.flag.get_flag(uid)
+
+	task = request.args.get('task')
+	user = request.args.get('user')
+	if (task is None or user is None): return "Usage: <code>/?task=&lt;task&gt;&user=&lt;uid&gt;</code>."
+
+	task = taskset.tasks.get(task)
+	if (task is None): return f"No task with such id: <code>{task}</code>."
+
+	return task.flag.get_flag(user)
 
 @app.route('/admin/restart')
 @login_required
 async def admin_restart():
 	if (not g.user.admin): return abort(403)
+
 	loop = asyncio.get_event_loop()
 	loop.call_later(1, lambda: exit(nolog=True))
+
 	return redirect(request.referrer or url_for('index'))
 
 @app.route('/admin/reload_tasks')
 @login_required
 async def admin_reload_tasks():
 	if (not g.user.admin): return abort(403)
+
 	try: load_tasks()
 	except Exception as ex: await flash(f"Error reloading tasks: {ex}.")
 	else: log("Tasks reloaded."); await flash("Tasks reloaded successfully.")
+
 	return redirect(request.referrer or url_for('index'))
 
 def load_tasks():
@@ -828,10 +947,14 @@ def load_tasks():
 @app.before_first_request
 def init():
 	global scoreboard_flag
+
 	scoreboard_flag = asyncio.Event()
+
 	for i in glob.iglob('/tmp/Sctf_taskdata_*'):
 		os.remove(i)
+
 	load_tasks()
+
 	loop = asyncio.get_event_loop()
 	for i in taskset.tasks.values():
 		if (hasattr(i, 'cgis')):
