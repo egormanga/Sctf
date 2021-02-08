@@ -31,7 +31,7 @@
 
 	{% block content -%}
 		<table rules="rows" cellpadding="4" style="width: auto; min-width: 50%; font-family: 'Ubuntu Mono', 'Monospace'; font-size: 24px;">
-			{% set tasks = g.builtins.sorted(g.taskset.tasks.values(), key=g.operator.attrgetter('cost')) %}
+			{% set tasks = g.builtins.sorted(g.taskset.tasks.values(), key=g.operator.attrgetter('cost')) -%}
 			<tr>
 				<th width="32" align="left" rowspan="2">#</th>
 				<th align="left" rowspan="2">Name</th>
@@ -39,15 +39,19 @@
 				<th rowspan="2"></th>
 				<th align="left" colspan="{{ g.builtins.len(tasks) }}">Solved tasks</th>
 			</tr>
+
 			<tr>
 				{%- for i in tasks %}
 				{# -#}	<th><a href="#{{ i.id }}" onclick="task_popup_show('{{ i.id }}')">{{ i.id }}</a><br>{{ i.scoring }}</th>
 				{%- endfor %}
 			</tr>
-			{% for ii, (user, score) in scoreboard %}
-			{# -#}	<tr{% if score == 0 %} class="zeroscored"{% endif %}>
-				{# -#}	<td>{{ ii+1 }}</td>
-				{# -#}	<td><a href="{{ url_for('user', nickname=user.nickname) }}">{{ user.nickname }}</a></td>
+
+			{%- set ns = namespace(place=0) %}
+			{% for user, score in scoreboard if not user.admin or g.user.admin %}
+				{%- if not user.admin %}{% set ns.place = ns.place+1 %}{% endif %}
+			{# -#}	<tr{% if score == 0 or g.user.admin and user.admin %} class="zeroscored"{% endif %}>
+				{# -#}	<td>{% if not user.admin %}{{ ns.place }}{% endif %}</td>
+				{# -#}	<td>{% if g.user.admin and user.admin %}<span title="admin">&star;</span> {% endif %}<a href="{{ url_for('user', nickname=user.nickname) }}">{{ user.nickname }}</a></td>
 				{# -#}	<td align="right">{{ score }}</td>
 				{# -#}	<td></td>
 					{%- set solved = user.solved.split(',') -%}

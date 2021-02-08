@@ -52,14 +52,15 @@ if (discord_webhook is not None): discord_texts = app.config['DISCORD_TEXTS']
 
 class User(db.Model, UserMixin):
 	id = db.Column(db.Integer, primary_key=True)
-	nickname = db.Column(db.String(128), index=True, unique=True)
+	nickname = db.Column(db.String(128), index=True, unique=True, nullable=False)
 	email = db.Column(db.String(256), index=True, unique=True)
-	discord_id = db.Column(db.Integer, unique=True)
+	discord_id = db.Column(db.Integer)
 	password = db.Column(db.String(64), nullable=False)
 	admin = db.Column(db.Boolean, nullable=False, default=False)
 	solved = db.Column(db.String(1024), nullable=False, default='')
 
-	def __repr__(self): return f"<User #{self.id} ({self.nickname})>"
+	def __repr__(self):
+		return f"<User #{self.id} ({self.nickname})>"
 
 	@property
 	def score(self):
@@ -760,7 +761,7 @@ async def taskdata():
 async def scoreboard():
 	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return "Scoreboard is not public visible."
 
-	scoreboard = enumerate(sorted({i: i.score for i in User.query.filter_by(admin=False).all()}.items(), key=operator.itemgetter(1), reverse=True))
+	scoreboard = sorted({i: i.score for i in User.query.all()}.items(), key=operator.itemgetter(1), reverse=True)
 	return await render_template('scoreboard.html', scoreboard=scoreboard)
 
 @app.route('/user/<nickname>')
