@@ -53,7 +53,7 @@ if (discord_webhook is not None): discord_texts = app.config['DISCORD_TEXTS']
 class User(db.Model, UserMixin):
 	id = db.Column(db.Integer, primary_key=True)
 	nickname = db.Column(db.String(128), index=True, unique=True, nullable=False)
-	email = db.Column(db.String(256), index=True, unique=True)
+	email = db.Column(db.String(256), index=True)
 	discord_id = db.Column(db.Integer)
 	password = db.Column(db.String(64), nullable=False)
 	admin = db.Column(db.Boolean, nullable=False, default=False)
