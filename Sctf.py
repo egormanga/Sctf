@@ -11,7 +11,7 @@ from flask_login import UserMixin, LoginManager, login_user, logout_user, curren
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from wtforms import TextField, SelectField, BooleanField, IntegerField, PasswordField
-from wtforms.validators import Email, EqualTo, Required
+from wtforms.validators import Email, EqualTo, Optional, Required
 from werkzeug.utils import secure_filename
 from utils.nolog import *
 
@@ -84,7 +84,7 @@ class RegisterForm(FlaskForm):
 
 class EditUserForm(FlaskForm):
 	nickname = TextField('Nickname')
-	email = TextField('E-Mail', validators=[Email("E-Mail must be valid.")])
+	email = TextField('E-Mail', validators=[Required("E-Mail is required."), Email("E-Mail must be valid.")])
 	discord_id = IntegerField('Discord id')
 
 class ChangePasswordForm(FlaskForm):
@@ -92,17 +92,18 @@ class ChangePasswordForm(FlaskForm):
 	new_password = PasswordField('New password', validators=[Required("New password is required.")])
 	new_password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('new_password', "Passwords must match.")])
 
-class AdminCreateUserForm(EditUserForm):
-	password = PasswordField('Password', validators=[Required("Password is required.")])
-	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
-	admin = BooleanField('Admin')
-
-class AdminEditUserForm(FlaskForm):
-	user = SelectField('User', coerce=int)
+class AdminBaseUserForm(FlaskForm):
 	nickname = TextField('Nickname')
-	email = TextField('E-Mail', validators=[Email("E-Mail must be valid if specified.")])
+	email = TextField('E-Mail', validators=[Optional(), Email("E-Mail must be valid if specified.")])
 	discord_id = IntegerField('Discord id')
 	admin = BooleanField('Admin')
+
+class AdminCreateUserForm(AdminBaseUserForm):
+	password = PasswordField('Password', validators=[Required("Password is required.")])
+	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
+
+class AdminEditUserForm(AdminBaseUserForm):
+	user = SelectField('User', coerce=int)
 
 class AdminDeleteUserForm(FlaskForm):
 	user = SelectField('User', coerce=int)
