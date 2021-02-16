@@ -143,8 +143,9 @@ def mktoken(uid, data):
 	return uid.hex()+hashlib.md5(data+hashlib.md5(secret_key).digest()+uid).hexdigest()
 
 def check_token(token, data):
-	uid = VarInt.read(io.BytesIO(token))
-	if (token != mktoken(uid, data)): return None
+	try: uid = VarInt.read(io.BytesIO(bytes.fromhex(token.decode('ascii'))))
+	except Exception: return None
+	if (token != mktoken(uid, data).encode()): return None
 	return uid
 
 @dispatch
@@ -378,7 +379,8 @@ class Flag_l33t(Flag_dynamic):
 	def get_flag(self, uid):
 		if (self.caseless): leet = {k: str().join(set(v.casefold())) for k, v in self.leet.items()}
 		else: leet = self.leet
-		r = re.sub(r'{.*}', lambda x: x[0].translate({ord(i): random.Random(rand_salt+str(uid)).choice(leet.get(i, i)) for i in set(x[0])}), self.pattern)
+		rand = random.Random(rand_salt+str(uid))
+		r = re.sub(r'{.*}', lambda x: x[0].translate({ord(i): rand.choice(leet.get(i, i)) for i in set(x[0])}), self.pattern)
 		return r.casefold() if (self.caseless) else r
 
 	def validate_flag(self, uid, flag):
@@ -499,9 +501,8 @@ class CGI_tcp(CGI):
 	async def start(self):
 		while (True):
 			try: self.server = await asyncio.start_server(self.handle, '0.0.0.0', self.port)
-			except OSError: pass
+			except OSError: self.port = freeports.pop()
 			else: break
-			self.port = freeports.pop()
 
 	@staticmethod
 	async def _transfer(src, dest):
@@ -946,6 +947,11 @@ def load_tasks():
 	global taskset
 	taskset = Taskset()
 
+	loop = asyncio.get_event_loop()
+	for i in taskset.tasks.values():
+		if (hasattr(i, 'cgis')):
+			loop.create_task(i.cgis.start())
+
 @app.before_first_request
 def init():
 	global scoreboard_flag
@@ -956,11 +962,6 @@ def init():
 		os.remove(i)
 
 	load_tasks()
-
-	loop = asyncio.get_event_loop()
-	for i in taskset.tasks.values():
-		if (hasattr(i, 'cgis')):
-			loop.create_task(i.cgis.start())
 
 @apmain
 @aparg('-p', '--port', type=int)
