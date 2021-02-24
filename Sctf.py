@@ -138,15 +138,15 @@ def after_request(r):
 
 def password_hash(nickname, password): return hashlib.sha3_256((nickname+hashlib.md5((nickname+password).encode()).hexdigest()+password).encode()).hexdigest()
 
-def mktoken(uid, data):
-	uid = VarInt.pack(uid)
-	return uid.hex()+hashlib.md5(data+hashlib.md5(secret_key).digest()+uid).hexdigest()
+def mktoken(id, data):
+	id = VarInt.pack(id)
+	return id.hex()+hashlib.md5(data+hashlib.md5(secret_key).digest()+id).hexdigest()
 
 def check_token(token, data):
-	try: uid = VarInt.read(io.BytesIO(bytes.fromhex(token.decode('ascii'))))
+	try: id = VarInt.read(io.BytesIO(bytes.fromhex(token.decode('ascii'))))
 	except Exception: return None
-	if (token != mktoken(uid, data).encode()): return None
-	return uid
+	if (token != mktoken(id, data).encode()): return None
+	return id
 
 @dispatch
 @lm.user_loader
@@ -257,6 +257,7 @@ class Task:
 				'ip': ip,
 				'host': host,
 				'env': daemon.env,
+				'token': mktoken(g.user.id, self.id.encode()),
 			}) for proto, daemon in self.daemons.daemons.items()})
 
 		class _Fmt(string.Formatter):
@@ -568,7 +569,8 @@ class Daemon:
 	def get_env(self):
 		env = os.environ.copy()
 
-		env['FLAG'] = self.task.flag.flag
+		try: env['FLAG'] = self.task.flag.flag
+		except AttributeError: env['FLAG_SECRET'] = mktoken(int.from_bytes(self.task.id.encode(), 'little'), str(id(taskset)))
 
 		return env
 
@@ -759,6 +761,24 @@ async def taskdata():
 
 	return Response(data, mimetype=mimetypes.guess_type(os.path.basename(filename))[0] or quart.static.DEFAULT_MIMETYPE, headers=headers)
 
+@app.route('/taskflag')
+async def taskflag():
+	secret = request.args.get('secret')
+	token = request.args.get('token')
+
+	if (secret is None or token is None): return abort(400)
+
+	task = check_token(token, str(id(taskset)))
+	if (task is None): return abort(403)
+
+	task = taskset.tasks.get(task)
+	if (task is None): return abort(404)
+
+	uid = check_token(token.strip(), task.id.encode())
+	if (uid is None): return abort(403)
+
+	return task.flag.get_flag(uid)
+
 @app.route('/scoreboard')
 async def scoreboard():
 	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return "Scoreboard is not public visible."
@@ -915,10 +935,16 @@ async def admin_get_flag():
 
 	task = request.args.get('task')
 	user = request.args.get('user')
-	if (task is None or user is None): return "Usage: <code>/?task=&lt;task&gt;&user=&lt;uid&gt;</code>."
+	token = request.args.get('token')
+
+	if (task is None or not (user is not None or token is not None)): return "Usage: <code>/?task=&lt;task&gt;&user=&lt;uid&gt;</code> or <code>/?task=&lt;task&gt;&token=&lt;token&gt;</code>."
 
 	task = taskset.tasks.get(task)
 	if (task is None): return f"No task with such id: <code>{task}</code>."
+
+	if (token is not None):
+		user = check_token(token.strip(), task.id.encode())
+		if (user is None): return "Invalid token."
 
 	return task.flag.get_flag(user)
 
