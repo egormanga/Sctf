@@ -148,8 +148,8 @@ def check_token(token, data):
 	if (token != mktoken(id, data).encode()): return None
 	return id
 
-def contest_started(): return (taskset.config.get('contest_started') or 'contest_start' not in taskset.config or time.time() >= time.strptime(taskset.config['contest_start'], '%d.%m %H:%M'))
-def contest_ended(): return (taskset.config.get('contest_ended') or 'contest_end' in taskset.config and time.time() >= time.strptime(taskset.config['contest_end'], '%d.%m %H:%M'))
+def contest_started(): return (taskset.config.get('contest_started') or 'contest_start' not in taskset.config or time.localtime() >= time.strptime(taskset.config['contest_start'], '%d.%m %H:%M'))
+def contest_ended(): return (taskset.config.get('contest_ended') or 'contest_end' in taskset.config and time.localtime() >= time.strptime(taskset.config['contest_end'], '%d.%m %H:%M'))
 def contest_running(): return (contest_started() and not contest_ended())
 
 @dispatch
@@ -645,7 +645,7 @@ async def login():
 async def register():
 	if (g.user and g.user.is_authenticated): return redirect(request.args.get('url') or url_for('index'))
 
-	if (not taskset.config.get('registration_opened', True) or 'registration_open' in taskset.config and time.time() < time.strptime(taskset.config['registration_open'], '%d.%m %H:%M')): return abort(403, "Registration is currently closed.")
+	if (not taskset.config.get('registration_opened', True) or 'registration_open' in taskset.config and time.localtime() < time.strptime(taskset.config['registration_open'], '%d.%m %H:%M')): return abort(403, "Registration is currently closed.")
 
 	form = RegisterForm()
 	if (await validate_form(form)):
