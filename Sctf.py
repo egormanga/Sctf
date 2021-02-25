@@ -95,12 +95,12 @@ class ChangePasswordForm(FlaskForm):
 class AdminBaseUserForm(FlaskForm):
 	nickname = TextField('Nickname')
 	email = TextField('E-Mail', validators=[Optional(), Email("E-Mail must be valid if specified.")])
-	discord_id = IntegerField('Discord id')
+	discord_id = IntegerField('Discord id', validators=[Optional()])
 	admin = BooleanField('Admin')
 
 class AdminCreateUserForm(AdminBaseUserForm):
-	password = PasswordField('Password', validators=[Required("Password is required.")])
-	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
+	password = PasswordField('Password', validators=[Optional()])
+	password_repeat = PasswordField('Repeat password', validators=[EqualTo('password', "Passwords must match.")])
 
 class AdminEditUserForm(AdminBaseUserForm):
 	user = SelectField('User', coerce=int)
