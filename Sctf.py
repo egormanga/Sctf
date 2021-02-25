@@ -691,7 +691,7 @@ async def change_password():
 @app.route('/tasks.json')
 @login_required
 async def tasks_json():
-	if (not contest_started()): return abort(403, "The contest has not started yet.")
+	if (not contest_started()): return Response('{}', mimetype='application/json')
 
 	return Response(json.dumps({i.id: {
 		'title': i.title,

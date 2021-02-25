@@ -124,7 +124,7 @@
 			$.ajax({
 				url: "{{ url_for('tasks_json') }}",
 				success: data => tasks = data,
-				error: console.error,
+				error: e => console.error(e.responseText),
 			});
 
 			function onload() {
@@ -145,8 +145,10 @@
 			}
 
 			function task_popup_show(id) {
-				tp = document.getElementById('task-popup-wrapper');
 				task = tasks[id];
+				if (!task) return;
+
+				tp = document.getElementById('task-popup-wrapper');
 				tp.querySelector('.task-popup').task_id = id;
 				tp.querySelector('.task-popup-title').textContent = task.title;
 				tp.querySelector('.task-popup-cost').textContent = task.cost;
