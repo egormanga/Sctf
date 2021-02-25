@@ -177,7 +177,7 @@
 			function submit_flag() {
 				$.ajax({
 					url: "{{ url_for('submit_flag') }}?id="+document.querySelector('.task-popup').task_id+'&flag='+document.querySelector('.task-popup-flag-input').value,
-					success: data => {alert(data); if (data == 'ok!') window.location.href = "{{ url_for('index') }}";},
+					success: data => {alert(data); if (data == 'Success!') window.location.href = "{{ url_for('index') }}";},
 					error: console.error,
 				});
 			}

@@ -148,6 +148,10 @@ def check_token(token, data):
 	if (token != mktoken(id, data).encode()): return None
 	return id
 
+def contest_started(): return (taskset.config.get('contest_started') or 'contest_start' not in taskset.config or time.time() >= time.strptime(taskset.config['contest_start'], '%d.%m %H:%M'))
+def contest_ended(): return (taskset.config.get('contest_ended') or 'contest_end' in taskset.config and time.time() >= time.strptime(taskset.config['contest_end'], '%d.%m %H:%M'))
+def contest_running(): return (contest_started() and not contest_ended())
+
 @dispatch
 @lm.user_loader
 def load_user(id: int):
@@ -640,7 +644,8 @@ async def login():
 @app.route('/register', methods=('GET', 'POST'))
 async def register():
 	if (g.user and g.user.is_authenticated): return redirect(request.args.get('url') or url_for('index'))
-	if (not taskset.config.get('registration_opened', True)): return "Registration is currently closed."
+
+	if (not taskset.config.get('registration_opened', True) or 'registration_open' in taskset.config and time.time() < time.strptime(taskset.config['registration_open'], '%d.%m %H:%M')): return abort(403, "Registration is currently closed.")
 
 	form = RegisterForm()
 	if (await validate_form(form)):
@@ -686,6 +691,8 @@ async def change_password():
 @app.route('/tasks.json')
 @login_required
 async def tasks_json():
+	if (not contest_started()): return abort(403, "The contest has not started yet.")
+
 	return Response(json.dumps({i.id: {
 		'title': i.title,
 		'cat': i.cat,
@@ -700,39 +707,41 @@ async def tasks_json():
 async def submit_flag():
 	id = request.args.get('id')
 	flag = request.args.get('flag')
-	task = taskset.tasks[id]
+
+	task = taskset.tasks.get(id)
+	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
 
 	log(f"Got flag from {g.user} for {task}: '{flag}'")
 
-	if (taskset.config.get('contest_ended')): r = "The contest is over."
-	elif (not re.match(r'^%s{.*}$' % taskset.flag_prefix, flag)): r = "This is not a flag. Flag format is: «%s{...}»" % taskset.flag_prefix
-	elif (not task.flag.validate_flag(g.user.id, flag.strip())): r = 'Wrong'
-	else:
-		g.user.solved = ','.join(S(g.user.solved.split(',')+[id]).uniquize()).strip(',')
-		db.session.commit()
-		scoreboard_flag.set()
+	if (not contest_started()): return "The contest has not started yet."
+	if (contest_ended()): return "The contest is over."
 
-		if (not g.user.admin and discord_webhook is not None):
-			try: r = requests.post(discord_webhook, json={
-				'content': random.choice(discord_texts).format(f'<@{g.user.discord_id}>' if (g.user.discord_id) else g.user.nickname),
-				'embeds': [{
-					'title': task.title,
-					'description': f"[{task.cost}]\n(solved by {len(task.solved_by)})",
-					'url': f"http{'s'*(not app.config.get('NO_HTTPS', False))}://{socket.gethostbyname(host) if (app.config.get('USE_IP_AS_HOST', False)) else app.config.get('HOSTNAME', socket.gethostname())}"+url_for('index', _anchor=task.id),
-					'color': 32767,
-				}],
-				**({
-					'nickname': 'ЖУЖ',
-					'avatar_url': "https://w0.pngwave.com/png/308/965/honey-bee-bizzy-b-s-tumblebus-tumble-bus-triple-crown-drive-bee-emoji-png-clip-art.png",
-				} if (random.random() < .001) else {}),
-			}).text
-			except Exception as ex: logexception(ex)
-			else:
-				if (r): logexception(WTFException(r))
+	if (not re.match(r'^%s{.*}$' % taskset.flag_prefix, flag)): return ("This is not a flag. Flag format is: «%s{...}»" % taskset.flag_prefix)
+	if (not task.flag.validate_flag(g.user.id, flag.strip())): return ('Жуж' if (random.random() < .01) else 'Wrong')
 
-		r = 'Success!'
+	g.user.solved = ','.join(S(g.user.solved.split(',')+[id]).uniquize()).strip(',')
+	db.session.commit()
+	scoreboard_flag.set()
 
-	return Response(r, mimetype='text/plain')
+	if (not g.user.admin and discord_webhook is not None):
+		try: r = requests.post(discord_webhook, json={
+			'content': random.choice(discord_texts).format(f'<@{g.user.discord_id}>' if (g.user.discord_id) else g.user.nickname),
+			'embeds': [{
+				'title': task.title,
+				'description': f"[{task.cost}]\n(solved by {len(task.solved_by)})",
+				'url': f"http{'s'*(not app.config.get('NO_HTTPS', False))}://{socket.gethostbyname(host) if (app.config.get('USE_IP_AS_HOST', False)) else app.config.get('HOSTNAME', socket.gethostname())}"+url_for('index', _anchor=task.id),
+				'color': 32767,
+			}],
+			**({
+				'nickname': 'ЖУЖ',
+				'avatar_url': "https://w0.pngwave.com/png/308/965/honey-bee-bizzy-b-s-tumblebus-tumble-bus-triple-crown-drive-bee-emoji-png-clip-art.png",
+			} if (random.random() < .001) else {}),
+		}).text
+		except Exception as ex: logexception(ex)
+		else:
+			if (r): logexception(WTFException(r))
+
+	return 'Success!'  # used in main.html template js
 
 @app.route('/taskdata')
 async def taskdata():
@@ -740,6 +749,8 @@ async def taskdata():
 	file = request.args.get('file')
 	token = request.args.get('token')
 	filename = os.path.join(os.path.join(task_dir(id), 'files'), file)
+
+	if (not contest_started()): return abort(403, "The contest has not started yet.")
 
 	uid = check_token(token, hashlib.md5(os.path.abspath(filename).encode()).digest())
 	if (uid is None): return abort(403)
@@ -766,6 +777,8 @@ async def taskflag():
 	secret = request.args.get('secret')
 	token = request.args.get('token')
 
+	if (not contest_started()): return abort(403, "The contest has not started yet.")
+
 	if (secret is None or token is None): return abort(400)
 
 	task = check_token(token, str(id(taskset)))
@@ -781,7 +794,8 @@ async def taskflag():
 
 @app.route('/scoreboard')
 async def scoreboard():
-	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return "Scoreboard is not public visible."
+	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return abort(403, "Scoreboard is not publicly visible.")
+	if (not contest_started()): return abort(403, "The contest has not started yet.")
 
 	scoreboard = sorted({i: i.score for i in User.query.all()}.items(), key=operator.itemgetter(1), reverse=True)
 	return await render_template('scoreboard.html', scoreboard=scoreboard)
@@ -795,7 +809,7 @@ async def user(nickname):
 
 @app.route('/flag')
 async def flag():
-	return 'omgrofl, nope!'
+	return abort(403, "Nope!")
 
 @app.route('/lp/scoreboard')
 async def lp_scoreboard():
@@ -937,14 +951,14 @@ async def admin_get_flag():
 	user = request.args.get('user')
 	token = request.args.get('token')
 
-	if (task is None or not (user is not None or token is not None)): return "Usage: <code>/?task=&lt;task&gt;&user=&lt;uid&gt;</code> or <code>/?task=&lt;task&gt;&token=&lt;token&gt;</code>."
+	if (task is None or not (user is not None or token is not None)): return abort(400, "Usage: <code>/?task=&lt;task&gt;&user=&lt;uid&gt;</code> or <code>/?task=&lt;task&gt;&token=&lt;token&gt;</code>.")
 
 	task = taskset.tasks.get(task)
-	if (task is None): return f"No task with such id: <code>{task}</code>."
+	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
 
 	if (token is not None):
 		user = check_token(token.strip(), task.id.encode())
-		if (user is None): return "Invalid token."
+		if (user is None): return abort(403, "Invalid token.")
 
 	return task.flag.get_flag(user)
 
