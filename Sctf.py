@@ -625,11 +625,11 @@ async def fonts_css():
 
 @app.route('/custom.css')
 async def custom_css():
-	return await send_from_directory(taskset.path, 'custom.css', conditional=True)
+	return await send_from_directory(taskset.path, 'custom.css')
 
 @app.route('/custom/<path:filename>')
 async def custom_static(filename):
-	return await send_from_directory(os.path.join(taskset.path, 'static'), filename, conditional=True)
+	return await send_from_directory(os.path.join(taskset.path, 'static'), filename)
 
 @app.route('/about')
 async def about():
