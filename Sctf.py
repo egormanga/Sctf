@@ -129,6 +129,7 @@ def before_request():
 	g.taskset = taskset
 	g.user = current_user
 	g.night = is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
+	g.custom_css = os.path.exists(os.path.join(taskset.path, 'custom.css'))
 
 	g.contest_started = (taskset.config.get('contest_started') or 'contest_start' not in taskset.config or time.localtime() >= time.strptime(taskset.config['contest_start'], '%d.%m.%y %H:%M'))
 	g.contest_ended = (taskset.config.get('contest_ended') or 'contest_end' in taskset.config and time.localtime() >= time.strptime(taskset.config['contest_end'], '%d.%m.%y %H:%M'))
@@ -180,9 +181,10 @@ def task_dir(id): return os.path.join('tasks', secure_filename(id))
 def load_task(id): return json.load(open(os.path.join(task_dir(id), 'task.json')))
 
 class Taskset:
-	__slots__ = ('config', 'tasks')
+	__slots__ = ('path', 'config', 'tasks')
 
 	def __init__(self, path='.'):
+		self.path = path
 		self.config = json.load(open(os.path.join(path, 'taskset.json')))
 		self.tasks = {i: Task(self, i, **load_task(i)) for i in os.listdir(os.path.join(path, 'tasks'))}
 
@@ -621,9 +623,17 @@ async def index():
 async def fonts_css():
 	return Response(await render_template('fonts.css'), mimetype='text/css')
 
+@app.route('/custom.css')
+async def custom_css():
+	return await send_from_directory(taskset.path, 'custom.css', conditional=True)
+
+@app.route('/custom/<path:filename>')
+async def custom_static(filename):
+	return await send_from_directory(os.path.join(taskset.path, 'static'), filename, conditional=True)
+
 @app.route('/about')
 async def about():
-	return Response(await render_template('about.html'), mimetype='text/html')
+	return await render_template('about.html')
 
 @app.route('/login', methods=('GET', 'POST'))
 async def login():

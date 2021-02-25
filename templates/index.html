@@ -49,7 +49,7 @@
 				display: table;
 			}
 
-			#tasks-header {
+			.tasks-header {
 				font-family: 'Nunito', 'Ubuntu', sans-serif;
 				font-weight: 400;
 				margin-left: 32px;
@@ -70,8 +70,12 @@
 	{%- endblock %}
 
 	{% block content %}
-		{% if g.contest_started %}
-			<h1 id="tasks-header">Tasks:</h1>
+		{% if not g.contest_started -%}
+			<h1 class="tasks-header">The contest has not started yet.</h1>
+		{%- endif %}
+
+		{% if g.admin or g.contest_started %}
+			<h1 class="tasks-header">Tasks:</h1>
 			<div id="tasks">
 			{% for cat in g.taskset.cats %}
 				<div>
@@ -86,7 +90,5 @@
 				</div>
 			{% endfor %}
 			</div>
-		{% else -%}
-			<h1 id="tasks-header">The contest has not started yet.</h1>
 		{% endif %}
 	{% endblock %}
