@@ -128,7 +128,7 @@ async def validate_form(form):
 def before_request():
 	g.taskset = taskset
 	g.user = current_user
-	g.night = is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
+	g.night = taskset.config.get('always_night') or is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
 	g.custom_css = os.path.exists(os.path.join(taskset.path, 'custom.css'))
 
 	g.contest_started = (taskset.config.get('contest_started') or 'contest_start' not in taskset.config or time.localtime() >= time.strptime(taskset.config['contest_start'], '%d.%m.%y %H:%M'))
