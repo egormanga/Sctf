@@ -74,7 +74,7 @@
 			<h1 class="tasks-header">The contest has not started yet.</h1>
 		{%- endif %}
 
-		{% if g.admin or g.contest_started %}
+		{% if g.user.admin or g.contest_started %}
 			<h1 class="tasks-header">Tasks:</h1>
 			<div id="tasks">
 			{% for cat in g.taskset.cats %}
