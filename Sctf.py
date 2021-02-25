@@ -249,7 +249,7 @@ class Task:
 		desc = self.compile_markdown(self.desc)
 		d = Sdict()
 
-		host = app.config.get('HOSTNAME', socket.gethostname())
+		host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
 		ip = socket.gethostbyname(host)
 		if (app.config.get('USE_IP_AS_HOST', False)): host = ip
 
