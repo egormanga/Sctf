@@ -702,7 +702,7 @@ async def change_password():
 @app.route('/tasks.json')
 @login_required
 async def tasks_json():
-	if (not g.contest_started): return Response('{}', mimetype='application/json')
+	if (not g.user.admin and not g.contest_started): return Response('{}', mimetype='application/json')
 
 	return Response(json.dumps({i.id: {
 		'title': i.title,
@@ -724,8 +724,8 @@ async def submit_flag():
 
 	log(f"Got flag from {g.user} for {task}: '{flag}'")
 
-	if (not g.contest_started): return "The contest has not started yet."
-	if (g.contest_ended): return "The contest is over."
+	if (not g.user.admin and not g.contest_started): return "The contest has not started yet."
+	if (not g.user.admin and g.contest_ended): return "The contest is over."
 
 	if (not re.match(r'^%s{.*}$' % taskset.flag_prefix, flag)): return ("This is not a flag. Flag format is: «%s{...}»" % taskset.flag_prefix)
 	if (not task.flag.validate_flag(g.user.id, flag.strip())): return ('Жуж' if (random.random() < .01) else 'Wrong')
@@ -761,7 +761,7 @@ async def taskdata():
 	token = request.args.get('token')
 	filename = os.path.join(os.path.join(task_dir(id), 'files'), file)
 
-	if (not g.contest_started): return abort(403, "The contest has not started yet.")
+	if (not g.user.admin and not g.contest_started): return abort(403, "The contest has not started yet.")
 
 	uid = check_token(token, hashlib.md5(os.path.abspath(filename).encode()).digest())
 	if (uid is None): return abort(403)
@@ -788,8 +788,6 @@ async def taskflag():
 	secret = request.args.get('secret')
 	token = request.args.get('token')
 
-	if (not g.contest_started): return abort(403, "The contest has not started yet.")
-
 	if (secret is None or token is None): return abort(400)
 
 	task = check_token(token, str(id(taskset)))
@@ -806,7 +804,7 @@ async def taskflag():
 @app.route('/scoreboard')
 async def scoreboard():
 	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return abort(403, "Scoreboard is not publicly visible.")
-	if (not g.contest_started): return abort(403, "The contest has not started yet.")
+	if (not g.user.admin and not g.contest_started): return abort(403, "The contest has not started yet.")
 
 	scoreboard = sorted({i: i.score for i in User.query.all()}.items(), key=operator.itemgetter(1), reverse=True)
 	return await render_template('scoreboard.html', scoreboard=scoreboard)
