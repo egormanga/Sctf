@@ -7,6 +7,7 @@
 		{# -#}		<link rel="preload" href="{{ url_for('static', filename='fonts/{font}_{charset}.woff2'.format(font=font, charset=charset)) }}" as="font" crossorigin>
 			{%- endfor %}
 		{%- endfor %}
+		<link rel="icon" href="/static/favicon.ico">
 		<link rel="stylesheet" href="{{ url_for('fonts_css') }}">
 		{% if g.custom_css %}<link rel="stylesheet" href="{{ url_for('custom_css') }}">{% endif %}
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
