@@ -129,6 +129,11 @@ def before_request():
 	g.taskset = taskset
 	g.user = current_user
 	g.night = is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
+
+	g.contest_started = (taskset.config.get('contest_started') or 'contest_start' not in taskset.config or time.localtime() >= time.strptime(taskset.config['contest_start'], '%d.%m.%y %H:%M'))
+	g.contest_ended = (taskset.config.get('contest_ended') or 'contest_end' in taskset.config and time.localtime() >= time.strptime(taskset.config['contest_end'], '%d.%m.%y %H:%M'))
+	g.contest_running = (g.contest_started and not g.contest_ended)
+
 	g.builtins, g.operator = builtins, operator
 
 @app.after_request
@@ -147,10 +152,6 @@ def check_token(token, data):
 	except Exception: return None
 	if (token != mktoken(id, data).encode()): return None
 	return id
-
-def contest_started(): return (taskset.config.get('contest_started') or 'contest_start' not in taskset.config or time.localtime() >= time.strptime(taskset.config['contest_start'], '%d.%m.%y %H:%M'))
-def contest_ended(): return (taskset.config.get('contest_ended') or 'contest_end' in taskset.config and time.localtime() >= time.strptime(taskset.config['contest_end'], '%d.%m.%y %H:%M'))
-def contest_running(): return (contest_started() and not contest_ended())
 
 @dispatch
 @lm.user_loader
@@ -691,7 +692,7 @@ async def change_password():
 @app.route('/tasks.json')
 @login_required
 async def tasks_json():
-	if (not contest_started()): return Response('{}', mimetype='application/json')
+	if (not g.contest_started): return Response('{}', mimetype='application/json')
 
 	return Response(json.dumps({i.id: {
 		'title': i.title,
@@ -713,8 +714,8 @@ async def submit_flag():
 
 	log(f"Got flag from {g.user} for {task}: '{flag}'")
 
-	if (not contest_started()): return "The contest has not started yet."
-	if (contest_ended()): return "The contest is over."
+	if (not g.contest_started): return "The contest has not started yet."
+	if (g.contest_ended): return "The contest is over."
 
 	if (not re.match(r'^%s{.*}$' % taskset.flag_prefix, flag)): return ("This is not a flag. Flag format is: «%s{...}»" % taskset.flag_prefix)
 	if (not task.flag.validate_flag(g.user.id, flag.strip())): return ('Жуж' if (random.random() < .01) else 'Wrong')
@@ -750,7 +751,7 @@ async def taskdata():
 	token = request.args.get('token')
 	filename = os.path.join(os.path.join(task_dir(id), 'files'), file)
 
-	if (not contest_started()): return abort(403, "The contest has not started yet.")
+	if (not g.contest_started): return abort(403, "The contest has not started yet.")
 
 	uid = check_token(token, hashlib.md5(os.path.abspath(filename).encode()).digest())
 	if (uid is None): return abort(403)
@@ -777,7 +778,7 @@ async def taskflag():
 	secret = request.args.get('secret')
 	token = request.args.get('token')
 
-	if (not contest_started()): return abort(403, "The contest has not started yet.")
+	if (not g.contest_started): return abort(403, "The contest has not started yet.")
 
 	if (secret is None or token is None): return abort(400)
 
@@ -795,7 +796,7 @@ async def taskflag():
 @app.route('/scoreboard')
 async def scoreboard():
 	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return abort(403, "Scoreboard is not publicly visible.")
-	if (not contest_started()): return abort(403, "The contest has not started yet.")
+	if (not g.contest_started): return abort(403, "The contest has not started yet.")
 
 	scoreboard = sorted({i: i.score for i in User.query.all()}.items(), key=operator.itemgetter(1), reverse=True)
 	return await render_template('scoreboard.html', scoreboard=scoreboard)

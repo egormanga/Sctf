@@ -69,20 +69,24 @@
 		<font size="4"> | <a href="{{ url_for('scoreboard') }}">Scoreboard</a> <font size="3">| <a href="{{ url_for('logout') }}">Logout</a></font></font>
 	{%- endblock %}
 
-	{% block content -%}
-		<h1 id="tasks-header">Tasks:</h1>
-		<div id="tasks">
-	{# -#}	{% for cat in g.taskset.cats -%}
-		{##}		<div>
-				{# -#}	<h2 class="cat-header">{{ cat }}</h2>
-					{%- for i in g.taskset.cats[cat] %}
-				{# -#}		<div class="task">
-							{%- if i.id in g.user.solved.split(',') -%}<strike>{%- endif -%}
+	{% block content %}
+		{% if g.contest_started %}
+			<h1 id="tasks-header">Tasks:</h1>
+			<div id="tasks">
+			{% for cat in g.taskset.cats %}
+				<div>
+					<h2 class="cat-header">{{ cat }}</h2>
+					{% for i in g.taskset.cats[cat] -%}
+						<div class="task">
+							{%- if i.id in g.user.solved.split(',') %}<strike>{% endif -%}
 							<a href="#{{ i.id }}" onclick="task_popup_show('{{ i.id }}')">{{ i.title }}</a>
-							{%- if i.id in g.user.solved.split(',') -%}</strike> (solved){%- endif -%}
+							{%- if i.id in g.user.solved.split(',') %}</strike> (solved){% endif -%}
 						</div>
-					{%- endfor %}
-			{# -#}	</div>
-	{# -#}	{%- endfor -%}
-	{##}	</div>
-	{%- endblock %}
+					{% endfor %}
+				</div>
+			{% endfor %}
+			</div>
+		{% else -%}
+			<h1 id="tasks-header">The contest has not started yet.</h1>
+		{% endif %}
+	{% endblock %}
