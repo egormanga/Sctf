@@ -623,9 +623,11 @@ class Daemons:
 	def __init__(self, task):
 		self.task = task
 		self.daemons = dict()
+
+	async def start(self):
 		daemonsdir = os.path.join(self.task.dir, 'daemons')
 		for i in os.listdir(daemonsdir):
-			self.daemons[i] = subclassdict(Daemon)[f"Daemon_{i}"](task, os.path.join(daemonsdir, i))
+			self.daemons[i] = subclassdict(Daemon)[f"Daemon_{i}"](self.task, await self.task.file(os.path.join(daemonsdir, i)))
 
 class Daemon:
 	__slots__ = ('task', 'process', 'env')
@@ -1088,6 +1090,8 @@ def load_tasks():
 	for i in taskset.tasks.values():
 		if (hasattr(i, 'cgis')):
 			loop.create_task(i.cgis.start())
+		if (hasattr(i, 'daemons')):
+			loop.create_task(i.daemons.start())
 
 @app.before_first_request
 def init():
