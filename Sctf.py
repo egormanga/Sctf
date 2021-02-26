@@ -155,7 +155,7 @@ def check_token(token: [str, bytes], data: bytes) -> [int, None]:
 		except ValueError: return None
 	token = token.strip()
 	try: id = VarInt.read(io.BytesIO(bytes.fromhex(token)))
-	except Exception as ex: logexception(ex); return None
+	except Exception as ex: logexception(ex, repr(token)); return None
 	if (token != mktoken(id, data)): return None
 	return id
 
