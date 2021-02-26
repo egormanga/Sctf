@@ -635,7 +635,7 @@ class Daemon:
 	def __init__(self, task, executable):
 		self.task = task
 		self.env = self.get_env()
-		self.process = subprocess.Popen(os.path.abspath(executable), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, cwd=os.path.dirname(executable), env=self.env)
+		self.process = subprocess.Popen(os.path.abspath(executable), stdin=subprocess.DEVNULL, stdout=sys.stderr, cwd=self.task.dir, env=self.env)
 
 	def __del__(self):
 		try: self.process.kill()
