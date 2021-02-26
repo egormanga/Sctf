@@ -188,7 +188,7 @@ def load_task(id): return json.load(open(os.path.join(task_dir(id), 'task.json')
 class Taskset:
 	__slots__ = ('path', 'config', 'tasks')
 
-	def __init__(self, path='.'):
+	def __init__(self, path):
 		self.path = path
 		self.config = json.load(open(os.path.join(path, 'taskset.json')))
 		self.tasks = {i: Task(self, i, **load_task(i)) for i in os.listdir(os.path.join(path, 'tasks'))}
@@ -298,7 +298,7 @@ class Task:
 		else: flag = None
 
 		ext = os.path.splitext(srcfilename)[1]
-		outfilename = tempfile.mkstemp(prefix='Sctf_taskdata_', suffix=outext if (outext is not None) else None)[1]
+		outfilename = tempfile.mkstemp(prefix=os.path.basename(os.path.abspath(taskset.path))+'_taskdata_', suffix=outext if (outext is not None) else None)[1]
 
 		if (ext == '.sh'): cmd = f"""FLAG={repr(flag)} {srcfilename} {outfilename}"""
 		elif (ext == '.c'): cmd = f"""tcc {f'''-DFLAG='"{flag}"' ''' if (flag is not None) else ''}{srcfilename} -o {outfilename}"""
@@ -1067,7 +1067,7 @@ async def admin_restart():
 	if (not g.user.admin): return abort(403)
 
 	loop = asyncio.get_event_loop()
-	loop.call_later(1, lambda: exit(nolog=True))
+	loop.call_later(1, lambda: exit())
 
 	return redirect(request.referrer or url_for('index'))
 
@@ -1084,7 +1084,7 @@ async def admin_reload_tasks():
 
 def load_tasks():
 	global taskset
-	taskset = Taskset()
+	taskset = Taskset('.')
 
 	loop = asyncio.get_event_loop()
 	for i in taskset.tasks.values():
@@ -1099,7 +1099,9 @@ def init():
 
 	scoreboard_flag = asyncio.Event()
 
-	for i in glob.iglob('/tmp/Sctf_taskdata_*'):
+	stale_taskdata = '/tmp/'+os.path.basename(os.path.abspath('.'))+'_taskdata_*'
+	log(f"Removing stale taskdata: {stale_taskdata}")
+	for i in glob.iglob(stale_taskdata):
 		os.remove(i)
 
 	load_tasks()
@@ -1112,6 +1114,6 @@ def main(cargs):
 	if (cargs.debug): app.env = 'development'; setlogfile(None); app.run(port=port, debug=True, use_reloader=False)  # no autoreload to support cgis
 	else: app.run('0.0.0.0', port=port)
 
-if (__name__ == '__main__'): exit(main(nolog=True), nolog=True)
+if (__name__ == '__main__'): exit(main())
 
 # by Sdore, 2021
