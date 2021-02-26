@@ -155,7 +155,7 @@ def check_token(token: [str, bytes], data: bytes) -> [int, None]:
 		except ValueError: return None
 	token = token.strip()
 	try: id = VarInt.read(io.BytesIO(bytes.fromhex(token)))
-	except Exception as ex: logexception(ex, repr(token)); return None
+	except Exception as ex: return None #logexception(ex, repr(token))
 	if (token != mktoken(id, data)): return None
 	return id
 
@@ -410,7 +410,7 @@ class Flag_random(Flag_dynamic):
 		self.task, self.pattern, self.length, self.caseless = task, pattern if (pattern is not None) else task.taskset.flag_prefix+'{.}', length, caseless
 
 	def get_flag(self, uid):
-		charset = string.ascii_lowercase if (self.caseless) else string.ascii_letters
+		# charset = string.ascii_lowercase if (self.caseless) else string.ascii_letters
 		return self.pattern.replace('.', randstr(self.length, caseless=self.caseless, seed=rand_salt+str(uid)), 1)
 
 	def validate_flag(self, uid, flag):
