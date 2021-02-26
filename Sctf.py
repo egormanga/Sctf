@@ -144,14 +144,18 @@ def after_request(r):
 
 def password_hash(nickname, password): return hashlib.sha3_256((nickname+hashlib.md5((nickname+password).encode()).hexdigest()+password).encode()).hexdigest()
 
-def mktoken(id, data):
+def mktoken(id: int, data: bytes) -> str:
 	id = VarInt.pack(id)
 	return id.hex()+hashlib.md5(data+hashlib.md5(secret_key).digest()+id).hexdigest()
 
-def check_token(token, data):
-	try: id = VarInt.read(io.BytesIO(bytes.fromhex(token.decode('ascii'))))
-	except Exception: return None
-	if (token != mktoken(id, data).encode()): return None
+def check_token(token: [str, bytes], data: bytes) -> [int, None]:
+	if (not isinstance(token, str)):
+		try: token = token.decode('ascii')
+		except ValueError: return None
+	token = token.strip()
+	try: id = VarInt.read(io.BytesIO(bytes.fromhex(token)))
+	except Exception as ex: logexception(ex); return None
+	if (token != mktoken(id, data)): return None
 	return id
 
 @dispatch
@@ -531,7 +535,7 @@ class CGI_tcp(CGI):
 		token = await reader.readline()
 		proc = None
 
-		uid = check_token(token.strip(), self.task.id.encode())
+		uid = check_token(token, self.task.id.encode())
 		if (uid is None):
 			writer.write(b"Invalid token.\n")
 			writer.write_eof()
@@ -761,7 +765,7 @@ async def taskdata():
 	id = request.args.get('id')
 	file = request.args.get('file')
 	token = request.args.get('token')
-	filename = os.path.join(os.path.join(task_dir(id), 'files'), file)
+	filename = os.path.join(task_dir(id), 'files', file)
 
 	if (not g.user.admin and not g.contest_started): return abort(403, "The contest has not started yet.")
 
@@ -792,13 +796,13 @@ async def taskflag():
 
 	if (secret is None or token is None): return abort(400)
 
-	task = check_token(token, str(id(taskset)))
+	task = check_token(secret, str(id(taskset)))
 	if (task is None): return abort(403)
 
 	task = taskset.tasks.get(task)
 	if (task is None): return abort(404)
 
-	uid = check_token(token.strip(), task.id.encode())
+	uid = check_token(token, task.id.encode())
 	if (uid is None): return abort(403)
 
 	return task.flag.get_flag(uid)
@@ -968,7 +972,7 @@ async def admin_get_flag():
 	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
 
 	if (token is not None):
-		user = check_token(token.strip(), task.id.encode())
+		user = check_token(token, task.id.encode())
 		if (user is None): return abort(403, "Invalid token.")
 
 	return task.flag.get_flag(user)
