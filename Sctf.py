@@ -880,7 +880,7 @@ async def taskflag():
 
 	if (secret is None or token is None): return abort(400)
 
-	task = check_token(secret, str(id(taskset)))
+	task = check_token(secret, str(id(taskset)).encode())
 	if (task is None): return abort(403)
 
 	task = taskset.tasks.get(task)
