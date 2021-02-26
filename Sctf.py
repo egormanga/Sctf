@@ -1084,6 +1084,12 @@ async def admin_reload_tasks():
 
 def load_tasks():
 	global taskset
+
+	stale_taskdata = '/tmp/'+os.path.basename(os.path.abspath('.'))+'_taskdata_*'
+	log(f"Removing stale taskdata: {stale_taskdata}")
+	for i in glob.iglob(stale_taskdata):
+		os.remove(i)
+
 	taskset = Taskset('.')
 
 	loop = asyncio.get_event_loop()
@@ -1096,14 +1102,7 @@ def load_tasks():
 @app.before_first_request
 def init():
 	global scoreboard_flag
-
 	scoreboard_flag = asyncio.Event()
-
-	stale_taskdata = '/tmp/'+os.path.basename(os.path.abspath('.'))+'_taskdata_*'
-	log(f"Removing stale taskdata: {stale_taskdata}")
-	for i in glob.iglob(stale_taskdata):
-		os.remove(i)
-
 	load_tasks()
 
 @apmain
