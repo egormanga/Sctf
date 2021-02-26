@@ -43,7 +43,8 @@ lm.login_view = 'login'
 
 setlogfile('Sctf.log')
 
-freeports = set(range(*app.config.get('TASK_PORT_RANGE', (51200, 51300))))
+freeports_tcp = set(range(*app.config.get('TASK_PORT_RANGE', (51200, 51300))))
+freeports_udp = set(range(*app.config.get('TASK_PORT_RANGE', (51200, 51300))))
 secret_key = hashlib.md5(app.config['SECRET_KEY'].encode()).hexdigest().encode()
 rand_salt = hashlib.md5(secret_key).hexdigest()
 
@@ -504,18 +505,18 @@ class CGI_tcp(CGI):
 
 	def __init__(self, task, executable):
 		self.task, self.executable = task, executable
-		self.port = freeports.pop()
+		self.port = freeports_tcp.pop()
 
 	def __del__(self):
 		try: self.server.close()
 		except AttributeError: pass
-		try: freeports.add(self.port)
+		try: freeports_tcp.add(self.port)
 		except AttributeError: pass
 
 	async def start(self):
 		while (True):
 			try: self.server = await asyncio.start_server(self.handle, '0.0.0.0', self.port)
-			except OSError: self.port = freeports.pop()
+			except OSError: self.port = freeports_tcp.pop()
 			else: break
 
 	@staticmethod
@@ -557,6 +558,65 @@ class CGI_tcp(CGI):
 		writer.close()
 		log(self.task, '-', addr, nolog=True)
 
+''' TODO:
+class CGI_udp(CGI):
+	class Protocol(asyncio.DatagramProtocol):
+		def __init__(self, executable):
+			self.executable = executable
+
+		def connection_made(self, transport):
+			self.transport = transport
+			self.transport.sendto(b"Enter your token: ")
+
+		@staticmethod
+		async def _transfer_from(src, dest):
+			while (True):
+				data = await src.read(4096)
+				if (not data): break
+				dest.sendto(data)
+
+		def datagram_received(self, data, addr):
+			log(self.task, '+', addr, nolog=True)
+
+			token = data
+			proc = None
+
+			uid = check_token(token, self.task.id.encode())
+			if (uid is None): self.transport.sendto(b"Invalid token.\n")
+			else:
+				env = os.environ.copy()
+				env['FLAG'] = self.task.flag.get_flag(uid)
+				self.transport.sendto(b"\033[A\r\033[K")
+				proc = await asyncio.create_subprocess_exec(os.path.abspath(self.executable), stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, cwd=self.task.dir, env=env)
+				loop = asyncio.get_event_loop()
+				#to_proc = loop.create_task(self._transfer(reader, proc.stdin))
+				from_proc = loop.create_task(self._transfer_from(proc.stdout, self.transport))
+
+			if (proc is not None):
+				await asyncio.wait_for(proc.wait(), timeout=app.config.get('SUBPROCESS_TIMEOUT', 300))
+				#to_proc.cancel()
+				from_proc.cancel()
+			log(self.task, '-', addr, nolog=True)
+
+	__slots__ = ('executable', 'port', 'server')
+
+	def __init__(self, task, executable):
+		self.task, self.executable = task, executable
+		self.port = freeports_udp.pop()
+
+	def __del__(self):
+		try: self.server.close()
+		except AttributeError: pass
+		try: freeports_udp.add(self.port)
+		except AttributeError: pass
+
+	async def start(self):
+		while (True):
+			try: self.endpoint = await asyncio.get_event_loop().create_datagram_endpoint(lambda: self.Protocol(self.executable), ('0.0.0.0', self.port))
+			except OSError: self.port = freeports_udp.pop()
+			else: break
+'''
+
 class Daemons:
 	__slots__ = ('task', 'daemons')
 
@@ -583,7 +643,7 @@ class Daemon:
 		env = os.environ.copy()
 
 		try: env['FLAG'] = self.task.flag.flag
-		except AttributeError: env['FLAG_SECRET'] = mktoken(int.from_bytes(self.task.id.encode(), 'little'), str(id(taskset)))
+		except AttributeError: env['FLAG_SECRET'] = mktoken(int.from_bytes(self.task.id.encode(), 'little'), str(id(self.task)))
 
 		return env
 
@@ -592,17 +652,39 @@ class Daemon_tcp(Daemon):
 
 	def __del__(self):
 		super().__del__()
-		try: freeports.add(self.port)
+		try: freeports_tcp.add(self.port)
 		except AttributeError: pass
 
 	def get_env(self):
 		env = super().get_env()
 
 		while (True):
-			self.port = freeports.pop()
+			self.port = freeports_tcp.pop()
 			try:
-				with socket.socket() as s:
-					if (s.connect_ex(('', self.port)) == 0): continue
+				with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+					s.bind(('', self.port))
+			except OSError: continue
+			else: break
+		env['PORT'] = str(self.port)
+
+		return env
+
+class Daemon_udp(Daemon):
+	__slots__ = ('port',)
+
+	def __del__(self):
+		super().__del__()
+		try: freeports_udp.add(self.port)
+		except AttributeError: pass
+
+	def get_env(self):
+		env = super().get_env()
+
+		while (True):
+			self.port = freeports_udp.pop()
+			try:
+				with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+					s.bind(('', self.port))
 			except OSError: continue
 			else: break
 		env['PORT'] = str(self.port)
