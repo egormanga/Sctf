@@ -270,6 +270,7 @@ class Task:
 		if (getattr(self, 'daemons', None)): d['daemon'] = S({proto: S({
 				'ip': ip,
 				'host': host,
+				'port': daemon.port,
 				'env': daemon.env,
 				'token': mktoken(g.user.id, self.id.encode()),
 			}) for proto, daemon in self.daemons.daemons.items()})
