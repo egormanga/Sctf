@@ -643,7 +643,7 @@ class Daemon:
 		env = os.environ.copy()
 
 		try: env['FLAG'] = self.task.flag.flag
-		except AttributeError: env['FLAG_SECRET'] = mktoken(int.from_bytes(self.task.id.encode(), 'little'), str(id(self.task)))
+		except AttributeError: env['FLAG_SECRET'] = mktoken(int.from_bytes(self.task.id.encode(), 'little'), str(id(self.task)).encode())
 
 		return env
 
