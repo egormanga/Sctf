@@ -292,7 +292,7 @@ class Task:
 
 		return filename
 
-	@aiocache.cached()
+	#@aiocache.cached()
 	async def compile_src(self, srcfilename, uid=None, *, outext=None):
 		if (uid is not None): flag = taskset.tasks[self.id].flag.get_flag(uid)
 		else: flag = None
