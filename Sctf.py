@@ -625,9 +625,8 @@ class Daemons:
 		self.daemons = dict()
 
 	async def start(self):
-		daemonsdir = os.path.join(self.task.dir, 'daemons')
-		for i in os.listdir(daemonsdir):
-			self.daemons[i] = subclassdict(Daemon)[f"Daemon_{i}"](self.task, await self.task.file(os.path.join(daemonsdir, i)))
+		for i in os.listdir(os.path.join(self.task.dir, 'daemons')):
+			self.daemons[i] = subclassdict(Daemon)[f"Daemon_{i}"](self.task, await self.task.file(os.path.join('daemons', i)))
 
 class Daemon:
 	__slots__ = ('task', 'process', 'env')
