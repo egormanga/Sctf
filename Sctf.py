@@ -207,7 +207,7 @@ class Taskset:
 		return Sdict(self.config.get('default', {}).get(x, {}))
 
 class Task:
-	__slots__ = ('taskset', 'id', 'title', 'cat', 'scoring', 'flag', 'desc', 'cgis', 'daemons', 'files')
+	__slots__ = ('taskset', 'id', 'title', 'cat', 'scoring', 'flag', 'desc', 'dir', 'cgis', 'daemons', 'files')
 
 	@init_defaults
 	def __init__(self, taskset, id, *, title, cat, cost, flag):
@@ -230,13 +230,15 @@ class Task:
 			flag = (self.taskset.default.flag & flag)
 			self.flag = allsubclassdict(Flag)[f"Flag_{flag['dynamic']}"](self, **flag)
 
-		self.desc = markdown.markdown(open(os.path.join(task_dir(id), 'task.md')).read())
+		self.dir = task_dir(id)
 
-		filesdir = os.path.join(task_dir(id), 'files')
+		self.desc = markdown.markdown(open(os.path.join(self.dir, 'task.md')).read())
+
+		filesdir = os.path.join(self.dir, 'files')
 		self.files = os.listdir(filesdir) if (os.path.isdir(filesdir)) else ()
 
-		if (os.path.isdir(os.path.join(task_dir(id), 'cgi'))): self.cgis = CGIs(self)
-		if (os.path.isdir(os.path.join(task_dir(id), 'daemons'))): self.daemons = Daemons(self)
+		if (os.path.isdir(os.path.join(self.dir, 'cgi'))): self.cgis = CGIs(self)
+		if (os.path.isdir(os.path.join(self.dir, 'daemons'))): self.daemons = Daemons(self)
 
 	def __repr__(self):
 		return f"<Task '{self.id}' ({self.title})>"
@@ -277,7 +279,7 @@ class Task:
 		return desc
 
 	async def file(self, file, uid=None):
-		filename = os.path.join(task_dir(self.id), file)
+		filename = os.path.join(self.dir, file)
 
 		if (os.path.islink(filename) and os.path.splitext(os.path.basename(os.path.realpath(filename)))[0] == os.path.splitext(os.path.basename(filename))[0]):
 			return await self.compile_src(os.path.realpath(filename), uid, outext=os.path.splitext(file)[1])
@@ -486,7 +488,7 @@ class CGIs:
 		self.cgis = dict()
 
 	async def start(self):
-		for i in os.listdir(os.path.join(task_dir(self.task.id), 'cgi')):
+		for i in os.listdir(os.path.join(self.task.dir, 'cgi')):
 			self.cgis[i] = subclassdict(CGI)[f"CGI_{i}"](self.task, await self.task.file(os.path.join('cgi', i)))
 			await self.cgis[i].start()
 
@@ -539,7 +541,7 @@ class CGI_tcp(CGI):
 			writer.write(b"\033[A\r\033[K")
 			await writer.drain()
 			#sock.setblocking(True)
-			proc = await asyncio.create_subprocess_exec(os.path.abspath(self.executable), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, cwd=os.path.dirname(self.executable), env=env)
+			proc = await asyncio.create_subprocess_exec(os.path.abspath(self.executable), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, cwd=self.task.dir, env=env)
 			loop = asyncio.get_event_loop()
 			to_proc = loop.create_task(self._transfer(reader, proc.stdin))
 			from_proc = loop.create_task(self._transfer(proc.stdout, writer))
@@ -557,7 +559,7 @@ class Daemons:
 	def __init__(self, task):
 		self.task = task
 		self.daemons = dict()
-		daemonsdir = os.path.join(task_dir(self.task.id), 'daemons')
+		daemonsdir = os.path.join(self.task.dir, 'daemons')
 		for i in os.listdir(daemonsdir):
 			self.daemons[i] = subclassdict(Daemon)[f"Daemon_{i}"](task, os.path.join(daemonsdir, i))
 
@@ -710,7 +712,7 @@ async def tasks_json():
 		'cost': str(i.scoring),
 		'desc': i.format_desc(),
 		'solved': len(i.solved_by),
-		'files': [(name, mktoken(g.user.id, hashlib.md5(os.path.abspath(os.path.join(task_dir(i.id), 'files', name)).encode()).digest())) for name in i.files],
+		'files': [(name, mktoken(g.user.id, hashlib.md5(os.path.abspath(os.path.join(i.dir, 'files', name)).encode()).digest())) for name in i.files],
 	} for i in taskset.tasks.values()}, ensure_ascii=False, separators=',:'), mimetype='application/json')
 
 @app.route('/submit_flag')
