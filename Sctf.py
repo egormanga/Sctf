@@ -304,7 +304,7 @@ class Task:
 		elif (ext == '.py'): cmd = f"""env {f'''FLAG={repr(flag)} ''' if (flag is not None) else ''}python3 {srcfilename} {outfilename}"""
 		elif (ext == '.go'): cmd = f"""go build {f'''-ldflags "-X main.FLAG={flag}" ''' if (flag is not None) else ''}-o {outfilename} {srcfilename}"""
 		else: raise NotImplementedError(ext)
-		p = await asyncio.create_subprocess_shell(cmd)
+		p = await asyncio.create_subprocess_shell(cmd, cwd=os.path.dirname(srcfilename))
 		assert (await p.wait() == 0)
 
 		return outfilename
