@@ -889,7 +889,7 @@ async def taskflag():
 	uid = check_token(token, task.id.encode())
 	if (uid is None): return abort(403)
 
-	return task.flag.get_flag(uid)
+	return Response(json.dumps({'task': task.id, 'uid': uid, 'flag': task.flag.get_flag(uid)}, mimetype='application/json')
 
 @app.route('/scoreboard')
 async def scoreboard():
