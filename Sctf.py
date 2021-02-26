@@ -645,7 +645,7 @@ class Daemon:
 		env = os.environ.copy()
 
 		try: env['FLAG'] = self.task.flag.flag
-		except AttributeError: env['FLAG_SECRET'] = mktoken(int.from_bytes(self.task.id.encode(), 'little'), str(id(app)).encode())
+		except AttributeError: env['FLAG_SECRET'] = mktoken(int(self.task.id.encode().hex(), 16), str(id(app)).encode())
 
 		return env
 
@@ -883,7 +883,7 @@ async def taskflag():
 	task = check_token(secret, str(id(app)).encode())
 	if (task is None): return abort(403)
 
-	task = taskset.tasks.get(task)
+	task = bytes.fromhex(hex(int(taskset.tasks.get(task)))[2:])
 	if (task is None): return abort(404)
 
 	uid = check_token(token, task.id.encode())
