@@ -883,7 +883,7 @@ async def taskflag():
 	task = check_token(secret, str(id(app)).encode())
 	if (task is None): return abort(403)
 
-	task = bytes.fromhex(hex(int(taskset.tasks.get(task)))[2:])
+	task = taskset.tasks.get(bytes.fromhex(hex(int(task))[2:]).decode())
 	if (task is None): return abort(404)
 
 	uid = check_token(token, task.id.encode())
