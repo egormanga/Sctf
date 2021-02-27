@@ -498,9 +498,6 @@ class CGIs:
 		try: return self.cgis[x]
 		except KeyError: raise AttributeError(x)
 
-	def __getitem__(self, x):
-		return self.cgis[x]
-
 	async def start(self):
 		for i in os.listdir(os.path.join(self.task.dir, 'cgi')):
 			self.cgis[i] = subclassdict(CGI)[f"CGI_{i}"](self.task, await self.task.file(os.path.join('cgi', i)))
@@ -636,9 +633,6 @@ class Daemons:
 	def __getattr__(self, x):
 		try: return self.daemons[x]
 		except KeyError: raise AttributeError(x)
-
-	def __getitem__(self, x):
-		return self.daemons[x]
 
 	async def start(self):
 		for i in os.listdir(os.path.join(self.task.dir, 'daemons')):
@@ -934,7 +928,7 @@ async def taskflag():
 async def web(task):
 	task = taskset.tasks.get(task)
 	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
-	if ('http' not in task.daemons): return abort(404, f"No web page for this task.")
+	if ('http' not in task.daemons.daemons): return abort(404, f"No web page for this task.")
 
 	host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
 	response = make_response(redirect(f"http://{host}:{task.daemons.http.port}"))
