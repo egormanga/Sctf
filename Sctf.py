@@ -931,7 +931,7 @@ async def web(task):
 @app.route('/scoreboard')
 async def scoreboard():
 	if (not g.user.is_authenticated and not taskset.config.get('public_scoreboard', True)): return abort(403, "Scoreboard is not publicly visible.")
-	if (not g.user.admin and not g.contest_started): return abort(403, "The contest has not started yet.")
+	if (not (g.user.is_authenticated and g.user.admin) and not g.contest_started): return abort(403, "The contest has not started yet.")
 
 	scoreboard = sorted({i: i.score for i in User.query.all()}.items(), key=operator.itemgetter(1), reverse=True)
 	return await render_template('scoreboard.html', scoreboard=scoreboard)
