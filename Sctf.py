@@ -253,7 +253,7 @@ class Task:
 		ip = socket.gethostbyname(host)
 		if (app.config.get('USE_IP_AS_HOST', False)): host = ip
 
-		d = Sdict()
+		d = Sdict({'': ''})
 
 		if (getattr(self, 'cgis', None)): d['cgi'] = S({proto: S({
 				'ip': ip,
@@ -277,7 +277,7 @@ class Task:
 				except (KeyError, AttributeError): return (x.join('{}'), x)
 
 		try: return _Fmt().format(self.desc, **d)
-		except Exception as ex: logexception(ex); return self.desc
+		except Exception as ex: logexception(ex, self); return self.desc
 
 	async def file(self, file, uid=None):
 		filename = os.path.join(self.dir, file)
@@ -333,6 +333,15 @@ class Flag:
 
 	def validate_flag(self, uid, flag):
 		return (flag == self.get_flag(uid))
+
+### TODO:
+#class Flag_caseless(Flag):
+#	def get_flag(self, uid):
+#		return super().get_flag().casefold()
+#
+#	def validate_flag(self, uid, flag):
+#		return (flag.casefold() == self.get_field(uid))
+###
 
 class Flag_dynamic(Flag):
 	__slots__ = ('task',)
@@ -970,6 +979,7 @@ async def admin_create_user():
 
 		db.session.add(user)
 		db.session.commit()
+		scoreboard_flag.set()
 
 		await flash(f"[Admin] {user} added.")
 		return redirect(url_for('user', nickname=user.nickname))
@@ -994,6 +1004,7 @@ async def admin_edit_user():
 
 		db.session.add(user)
 		db.session.commit()
+		scoreboard_flag.set()
 
 		await flash(f"[Admin] {user} saved.")
 		return redirect(url_for('user', nickname=user.nickname))
@@ -1022,6 +1033,7 @@ async def admin_delete_user():
 
 		db.session.delete(user)
 		db.session.commit()
+		scoreboard_flag.set()
 
 		await flash(f"[Admin] {user} deleted.")
 		return redirect(url_for('index'))
