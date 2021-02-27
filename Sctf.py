@@ -248,17 +248,12 @@ class Task:
 	def __repr__(self):
 		return f"<Task '{self.id}' ({self.title})>"
 
-	@lrucachedfunction
-	def compile_markdown(self, src):  # thx to @nickname32
-		return markdown.markdown(src)
-
 	def format_desc(self):
-		desc = self.compile_markdown(self.desc)
-		d = Sdict()
-
 		host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
 		ip = socket.gethostbyname(host)
 		if (app.config.get('USE_IP_AS_HOST', False)): host = ip
+
+		d = Sdict()
 
 		if (getattr(self, 'cgis', None)): d['cgi'] = S({proto: S({
 				'ip': ip,
@@ -281,9 +276,8 @@ class Task:
 				try: return super().get_field(x, args, kwargs)
 				except (KeyError, AttributeError): return (x.join('{}'), x)
 
-		try: desc = _Fmt().format(desc, **d)
-		except Exception as ex: logexception(ex)
-		return desc
+		try: return _Fmt().format(self.desc, **d)
+		except Exception as ex: logexception(ex); return self.desc
 
 	async def file(self, file, uid=None):
 		filename = os.path.join(self.dir, file)
