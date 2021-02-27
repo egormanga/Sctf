@@ -498,6 +498,9 @@ class CGIs:
 		try: return self.cgis[x]
 		except KeyError: raise AttributeError(x)
 
+	def __getitem__(self, x):
+		return self.cgis[x]
+
 	async def start(self):
 		for i in os.listdir(os.path.join(self.task.dir, 'cgi')):
 			self.cgis[i] = subclassdict(CGI)[f"CGI_{i}"](self.task, await self.task.file(os.path.join('cgi', i)))
@@ -633,6 +636,9 @@ class Daemons:
 	def __getattr__(self, x):
 		try: return self.daemons[x]
 		except KeyError: raise AttributeError(x)
+
+	def __getitem__(self, x):
+		return self.daemons[x]
 
 	async def start(self):
 		for i in os.listdir(os.path.join(self.task.dir, 'daemons')):
