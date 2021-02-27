@@ -70,7 +70,7 @@
 			(function lp() {
 				$.ajax({
 					url: "{{ url_for('lp_scoreboard') }}",
-					success: r => {if (r == '1') window.location.reload();},
+					success: r => {if (r == '1') window.location.reload(); setTimeout(lp, 5000)},
 					error: e => {console.error(e); setTimeout(lp, 5000)},
 				});
 			})()
