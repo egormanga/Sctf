@@ -699,12 +699,12 @@ class Daemon_udp(Daemon):
 		return env
 
 class Daemon_http(Daemon):
-	__slots__ = ('url',)
+	__slots__ = ('host', 'url')
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		host = app.config.get('HOSTNAME', socket.gethostname())
-		self.url = f"https://{host}/web/{self.task.id}"
+		self.host = app.config.get('HOSTNAME', socket.gethostname())
+		self.url = f"https://{self.host}/web/{self.task.id}"
 
 	def __del__(self):
 		super().__del__()
@@ -930,8 +930,7 @@ async def web(task):
 	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
 	if ('http' not in task.daemons.daemons): return abort(404, f"No web page for this task.")
 
-	host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
-	response = await make_response(redirect(f"http://{host}:{task.daemons.http.port}"))
+	response = await make_response(redirect(f"http://{task.daemons.http.host}:{task.daemons.http.port}"))
 	response.set_cookie('task_token_'+task.id, mktoken(g.user.id, task.id.encode()))
 	return response
 
