@@ -272,7 +272,7 @@ class Task:
 				'host': host,
 				'env': daemon.env,
 				'port': daemon.port,
-				**({'url': daemon.url} if (hasattr(daemon, 'url')) else ()),
+				**({'url': daemon.url} if (hasattr(daemon, 'url')) else {}),
 				'token': mktoken(g.user.id, self.id.encode()),
 			}) for proto, daemon in self.daemons.daemons.items()})
 
