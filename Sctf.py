@@ -931,7 +931,7 @@ async def web(task):
 	if ('http' not in task.daemons.daemons): return abort(404, f"No web page for this task.")
 
 	host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
-	response = make_response(redirect(f"http://{host}:{task.daemons.http.port}"))
+	response = await make_response(redirect(f"http://{host}:{task.daemons.http.port}"))
 	response.set_cookie('task_token_'+task.id, mktoken(g.user.id, self.id.encode()))
 	return response
 
