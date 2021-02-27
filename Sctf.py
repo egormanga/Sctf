@@ -932,7 +932,7 @@ async def web(task):
 
 	host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
 	response = await make_response(redirect(f"http://{host}:{task.daemons.http.port}"))
-	response.set_cookie('task_token_'+task.id, mktoken(g.user.id, self.id.encode()))
+	response.set_cookie('task_token_'+task.id, mktoken(g.user.id, task.id.encode()))
 	return response
 
 @app.route('/scoreboard')
