@@ -1148,6 +1148,8 @@ def load_tasks():
 		if (hasattr(i, 'daemons')):
 			loop.create_task(i.daemons.start())
 
+	scoreboard_flag.set()
+
 @app.before_first_request
 def init():
 	global scoreboard_flag
