@@ -270,8 +270,9 @@ class Task:
 		if (getattr(self, 'daemons', None)): d['daemon'] = S({proto: S({
 				'ip': ip,
 				'host': host,
-				'port': daemon.port,
 				'env': daemon.env,
+				'port': daemon.port,
+				**({'url': daemon.url} if (hasattr(daemon, 'url')) else ()),
 				'token': mktoken(g.user.id, self.id.encode()),
 			}) for proto, daemon in self.daemons.daemons.items()})
 
@@ -493,16 +494,20 @@ class CGIs:
 		self.task = task
 		self.cgis = dict()
 
+	def __getattr__(self, x):
+		try: return self.cgis[x]
+		except KeyError: raise AttributeError(x)
+
 	async def start(self):
 		for i in os.listdir(os.path.join(self.task.dir, 'cgi')):
 			self.cgis[i] = subclassdict(CGI)[f"CGI_{i}"](self.task, await self.task.file(os.path.join('cgi', i)))
 			await self.cgis[i].start()
 
 class CGI:
-	__slots__ = ('task',)
+	__slots__ = ('task', 'port')
 
 class CGI_tcp(CGI):
-	__slots__ = ('executable', 'port', 'server')
+	__slots__ = ('executable', 'server')
 
 	def __init__(self, task, executable):
 		self.task, self.executable = task, executable
@@ -599,7 +604,7 @@ class CGI_udp(CGI):
 				from_proc.cancel()
 			log(self.task, '-', addr, nolog=True)
 
-	__slots__ = ('executable', 'port', 'server')
+	__slots__ = ('executable', 'server')
 
 	def __init__(self, task, executable):
 		self.task, self.executable = task, executable
@@ -625,12 +630,16 @@ class Daemons:
 		self.task = task
 		self.daemons = dict()
 
+	def __getattr__(self, x):
+		try: return self.daemons[x]
+		except KeyError: raise AttributeError(x)
+
 	async def start(self):
 		for i in os.listdir(os.path.join(self.task.dir, 'daemons')):
 			self.daemons[i] = subclassdict(Daemon)[f"Daemon_{i}"](self.task, await self.task.file(os.path.join('daemons', i)))
 
 class Daemon:
-	__slots__ = ('task', 'process', 'env')
+	__slots__ = ('task', 'process', 'env', 'port')
 
 	def __init__(self, task, executable):
 		self.task = task
@@ -650,8 +659,6 @@ class Daemon:
 		return env
 
 class Daemon_tcp(Daemon):
-	__slots__ = ('port',)
-
 	def __del__(self):
 		super().__del__()
 		try: freeports_tcp.add(self.port)
@@ -672,8 +679,6 @@ class Daemon_tcp(Daemon):
 		return env
 
 class Daemon_udp(Daemon):
-	__slots__ = ('port',)
-
 	def __del__(self):
 		super().__del__()
 		try: freeports_udp.add(self.port)
@@ -690,6 +695,34 @@ class Daemon_udp(Daemon):
 			except OSError: continue
 			else: break
 		env['PORT'] = str(self.port)
+
+		return env
+
+class Daemon_http(Daemon):
+	__slots__ = ('url',)
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
+		self.url = f"https://{host}/web/{self.task.id}"
+
+	def __del__(self):
+		super().__del__()
+		try: freeports_tcp.add(self.port)
+		except AttributeError: pass
+
+	def get_env(self):
+		env = super().get_env()
+
+		while (True):
+			self.port = freeports_tcp.pop()
+			try:
+				with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+					s.bind(('', self.port))
+			except OSError: continue
+			else: break
+		env['PORT'] = str(self.port)
+		env['TOKEN_COOKIE'] = 'task_token_'+self.task.id
 
 		return env
 
@@ -890,6 +923,17 @@ async def taskflag():
 	if (uid is None): return abort(403)
 
 	return Response(json.dumps({'task': task.id, 'uid': uid, 'flag': task.flag.get_flag(uid)}), mimetype='application/json')
+
+@app.route('/web/<task>')
+async def web(task):
+	task = taskset.tasks.get(task)
+	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
+	if ('http' not in task.daemons): return abort(404, f"No web page for this task.")
+
+	host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
+	response = make_response(redirect(f"http://{host}:{task.daemons.http.port}"))
+	response.set_cookie('task_token_'+task.id, mktoken(g.user.id, self.id.encode()))
+	return response
 
 @app.route('/scoreboard')
 async def scoreboard():
