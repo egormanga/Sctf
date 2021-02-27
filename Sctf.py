@@ -538,7 +538,7 @@ class CGI_tcp(CGI):
 	async def handle(self, reader, writer):
 		#sock = writer.get_extra_info('socket')
 		addr = writer.get_extra_info('peername')
-		log(self.task, '+', addr, nolog=True)
+		log(self.task, '+', addr)
 
 		writer.write(b"Enter your token: ")
 		await writer.drain()
@@ -565,7 +565,7 @@ class CGI_tcp(CGI):
 			to_proc.cancel()
 			from_proc.cancel()
 		writer.close()
-		log(self.task, '-', addr, nolog=True)
+		log(self.task, '-', addr)
 
 ''' TODO:
 class CGI_udp(CGI):
@@ -585,7 +585,7 @@ class CGI_udp(CGI):
 				dest.sendto(data)
 
 		def datagram_received(self, data, addr):
-			log(self.task, '+', addr, nolog=True)
+			log(self.task, '+', addr)
 
 			token = data
 			proc = None
@@ -605,7 +605,7 @@ class CGI_udp(CGI):
 				await asyncio.wait_for(proc.wait(), timeout=app.config.get('SUBPROCESS_TIMEOUT', 300))
 				#to_proc.cancel()
 				from_proc.cancel()
-			log(self.task, '-', addr, nolog=True)
+			log(self.task, '-', addr)
 
 	__slots__ = ('executable', 'server')
 
