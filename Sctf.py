@@ -709,7 +709,7 @@ class Daemon_http(Daemon):
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
+		host = app.config.get('HOSTNAME', socket.gethostname())
 		self.url = f"https://{host}/web/{self.task.id}"
 
 	def __del__(self):
