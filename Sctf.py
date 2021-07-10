@@ -737,7 +737,8 @@ def _geoip(ip):
 def is_night(ip=None):
 	try: observer = astral.Observer(*_geoip(ip))
 	except Exception: observer = astral.geocoder.lookup('Moscow', astral.geocoder.database()).observer
-	start, end = astral.sun.night(observer)
+	try: start, end = astral.sun.night(observer)
+	except Exception: return False
 	return (start <= datetime.datetime.now(start.tzinfo) < end)
 
 @app.route('/')
