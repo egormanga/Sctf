@@ -11,6 +11,7 @@ from flask_wtf import FlaskForm
 from wtforms import TextField, SelectField, BooleanField, IntegerField, PasswordField
 from wtforms.validators import Email, EqualTo, Optional, Required
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from utils.nolog import *
 
 class PrefixedQuart(Quart):
@@ -141,7 +142,8 @@ def after_request(r):
 	#if ('text/html' in r.content_type): r.set_data(css_html_js_minify.html_minify(r.get_data(as_text=True)))
 	return r
 
-def password_hash(nickname, password): return hashlib.sha3_256((nickname+hashlib.md5((nickname+password).encode()).hexdigest()+password).encode()).hexdigest()
+def password_hash(password): 
+	return generate_password_hash(password, method='sha256')
 
 def mktoken(id: int, data: bytes) -> str:
 	id = VarInt.pack(id)
@@ -163,8 +165,8 @@ def load_user(id: int):
 	return User.query.filter_by(id=id).first()
 
 @dispatch
-def load_user(*, nickname: str, password: str):
-	return User.query.filter_by(nickname=nickname, password=password_hash(nickname, password)).first()
+def load_user(*, nickname: str):
+	return User.query.filter_by(nickname=nickname).first()
 
 @dispatch
 def load_user(**kwargs):
@@ -768,7 +770,7 @@ async def login():
 
 	form = LoginForm()
 	if (await validate_form(form)):
-		user = load_user(nickname=form.login.data, password=form.password.data)
+		user = load_user(nickname=form.login.data)
 		if (not user):
 			await flash("Incorrect login or password.")
 			return redirect(url_for('login'))
@@ -791,7 +793,7 @@ async def register():
 			await flash(f"Пользователь с таким {'ником' if (usern) else 'e-mail'} уже существует.")
 			return redirect(url_for('register'))
 		else:
-			user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.nickname.data, form.password.data), discord_id=form.discord_id.data)
+			user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.password.data), discord_id=form.discord_id.data)
 			db.session.add(user)
 			db.session.commit()
 			log(f"User registered: {user}")
@@ -812,11 +814,11 @@ async def change_password():
 	form = ChangePasswordForm()
 
 	if (await validate_form(form)):
-		if (password_hash(g.user.nickname, form.current_password.data) != g.user.password):
+		if not check_password_hash(g.user.password, form.current_password.data):
 			await flash("Current password is wrong.")
 			return redirect(url_for('change_password'))
 
-		g.user.password = password_hash(g.user.nickname, form.new_password.data)
+		g.user.password = password_hash(form.new_password.data)
 		db.session.commit()
 
 		await flash("Password changed successfully.")
@@ -974,7 +976,7 @@ async def admin_create_user():
 	form = AdminCreateUserForm()
 
 	if (await validate_form(form)):
-		user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.nickname.data, form.password.data), discord_id=form.discord_id.data, admin=form.admin.data)
+		user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.password.data), discord_id=form.discord_id.data, admin=form.admin.data)
 
 		db.session.add(user)
 		db.session.commit()
@@ -1054,7 +1056,7 @@ async def admin_reset_password():
 	if (await validate_form(form)):
 		user = load_user(id=form.user.data)
 
-		user.password = password_hash(user.nickname, form.password.data)
+		user.password = password_hash(form.password.data)
 
 		db.session.add(user)
 		db.session.commit()
