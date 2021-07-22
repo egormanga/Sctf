@@ -2,8 +2,6 @@
 # Sctf
 
 import pygeoip, markdown, werkzeug, astral.sun, astral.geocoder, css_html_js_minify
-from Crypto.Util import Counter
-from Crypto.Cipher import AES
 import quart; quart.htmlsafe_dumps = None
 import quart.flask_patch
 from quart import *
