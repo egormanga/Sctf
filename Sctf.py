@@ -9,7 +9,7 @@ from flask_login import UserMixin, LoginManager, login_user, logout_user, curren
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from wtforms import TextField, SelectField, BooleanField, IntegerField, PasswordField
-from wtforms.validators import Email, EqualTo, Optional, Required
+from wtforms.validators import Email, EqualTo, Optional, DataRequired
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.exceptions import HTTPException, InternalServerError
@@ -72,27 +72,27 @@ db.create_all()
 db.session.commit()
 
 class LoginForm(FlaskForm):
-	login = TextField('Login', validators=[Required("Login is required.")])
-	password = PasswordField('Password', validators=[Required("Password is required.")])
+	login = TextField('Login', validators=[DataRequired("Login is required.")])
+	password = PasswordField('Password', validators=[DataRequired("Password is required.")])
 	remember_me = BooleanField('Remember')
 
 class RegisterForm(FlaskForm):
-	nickname = TextField('Nickname', validators=[Required("Nickname is required.")])
-	email = TextField('E-Mail', validators=[Required("E-Mail is required."), Email("E-Mail must be valid.")])
+	nickname = TextField('Nickname', validators=[DataRequired("Nickname is required.")])
+	email = TextField('E-Mail', validators=[DataRequired("E-Mail is required."), Email("E-Mail must be valid.")])
 	discord_id = IntegerField('Discord id')
-	password = PasswordField('Password', validators=[Required("Password is required.")])
-	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
+	password = PasswordField('Password', validators=[DataRequired("Password is required.")])
+	password_repeat = PasswordField('Repeat password', validators=[DataRequired("Password repeat is required."), EqualTo('password', "Passwords must match.")])
 	remember_me = BooleanField('Remember')
 
 class EditUserForm(FlaskForm):
 	nickname = TextField('Nickname')
-	email = TextField('E-Mail', validators=[Required("E-Mail is required."), Email("E-Mail must be valid.")])
+	email = TextField('E-Mail', validators=[DataRequired("E-Mail is required."), Email("E-Mail must be valid.")])
 	discord_id = IntegerField('Discord id')
 
 class ChangePasswordForm(FlaskForm):
-	current_password = PasswordField('Current password', validators=[Required("Password is required.")])
-	new_password = PasswordField('New password', validators=[Required("New password is required.")])
-	new_password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('new_password', "Passwords must match.")])
+	current_password = PasswordField('Current password', validators=[DataRequired("Password is required.")])
+	new_password = PasswordField('New password', validators=[DataRequired("New password is required.")])
+	new_password_repeat = PasswordField('Repeat password', validators=[DataRequired("Password repeat is required."), EqualTo('new_password', "Passwords must match.")])
 
 class AdminBaseUserForm(FlaskForm):
 	nickname = TextField('Nickname')
@@ -112,8 +112,8 @@ class AdminDeleteUserForm(FlaskForm):
 
 class AdminPasswordResetForm(FlaskForm):
 	user = SelectField('User', coerce=int)
-	password = PasswordField('Password', validators=[Required("Password is required.")])
-	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
+	password = PasswordField('Password', validators=[DataRequired("Password is required.")])
+	password_repeat = PasswordField('Repeat password', validators=[DataRequired("Password repeat is required."), EqualTo('password', "Passwords must match.")])
 
 class AdminSubsUserForm(FlaskForm):
 	user = SelectField('User', coerce=int)
