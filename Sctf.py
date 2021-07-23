@@ -11,7 +11,7 @@ from flask_wtf import FlaskForm
 from wtforms import TextField, SelectField, BooleanField, IntegerField, PasswordField
 from wtforms.validators import Email, EqualTo, Optional, DataRequired
 from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.exceptions import HTTPException, InternalServerError
 from utils.nolog import *
 
@@ -146,8 +146,7 @@ def after_request(r):
 	#if ('text/html' in r.content_type): r.set_data(css_html_js_minify.html_minify(r.get_data(as_text=True)))
 	return r
 
-def password_hash(password): 
-	return generate_password_hash(password, method='sha256')
+def password_hash(password): return generate_password_hash(password, method='sha256')
 
 def mktoken(id: int, data: bytes) -> str:
 	id = VarInt.pack(id)
@@ -819,7 +818,7 @@ async def change_password():
 	form = ChangePasswordForm()
 
 	if (await validate_form(form)):
-		if not check_password_hash(g.user.password, form.current_password.data):
+		if (not check_password_hash(g.user.password, form.current_password.data)):
 			await flash("Current password is wrong.")
 			return redirect(url_for('change_password'))
 
