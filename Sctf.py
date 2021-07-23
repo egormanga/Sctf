@@ -12,6 +12,7 @@ from wtforms import TextField, SelectField, BooleanField, IntegerField, Password
 from wtforms.validators import Email, EqualTo, Optional, Required
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import HTTPException, InternalServerError
 from utils.nolog import *
 
 class PrefixedQuart(Quart):
@@ -32,6 +33,7 @@ class PrefixedQuart(Quart):
 
 app = PrefixedQuart(__name__)
 app.config.from_object('config')
+app.register_error_handler(Exception, lambda ex: ex if (isinstance(ex, HTTPException)) else Sexcepthook(ex.__class__, ex, ex.__traceback__) or InternalServerError())
 app.prefix_static()
 db = SQLAlchemy(app)
 lm = LoginManager()
