@@ -44,6 +44,8 @@ lm.login_view = 'login'
 
 setlogfile('Sctf.log')
 
+tmpdir = app.config.get('TASKDATA_TMPDIR', '/tmp/Sctf')
+
 freeports_tcp = set(range(*app.config.get('TASK_PORT_RANGE', (51200, 51300))))
 freeports_udp = set(range(*app.config.get('TASK_PORT_RANGE', (51200, 51300))))
 secret_key = hashlib.md5(app.config['SECRET_KEY'].encode()).hexdigest().encode()
@@ -295,7 +297,8 @@ class Task:
 		else: flag = None
 
 		ext = os.path.splitext(srcfilename)[1]
-		outfilename = tempfile.mkstemp(prefix=os.path.basename(os.path.abspath(taskset.path))+'_taskdata_', suffix=outext if (outext is not None) else None)[1]
+		os.makedirs(tmpdir, exist_ok=True)
+		outfilename = tempfile.mkstemp(dir=tmpdir, prefix='taskdata_', suffix=outext if (outext is not None) else None)[1]
 
 		if (ext == '.sh'): cmd = f"""FLAG={repr(flag)} {srcfilename} {outfilename}"""
 		elif (ext == '.c'): cmd = f"""tcc {f'''-DFLAG='"{flag}"' ''' if (flag is not None) else ''}{srcfilename} -o {outfilename}"""
@@ -1137,7 +1140,8 @@ async def admin_reload_tasks():
 def load_tasks():
 	global taskset
 
-	stale_taskdata = '/tmp/'+os.path.basename(os.path.abspath('.'))+'_taskdata_*'
+	assert (not glob.has_magic(tmpdir))
+	stale_taskdata = os.path.join(tmpdir, 'taskdata_*')
 	log(f"Removing stale taskdata: {stale_taskdata}")
 	for i in glob.iglob(stale_taskdata):
 		os.remove(i)
