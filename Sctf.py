@@ -168,10 +168,6 @@ def load_user(id: int):
 	return User.query.filter_by(id=id).first()
 
 @dispatch
-def load_user(*, nickname: str):
-	return User.query.filter_by(nickname=nickname).first()
-
-@dispatch
 def load_user(**kwargs):
 	return User.query.filter_by(**kwargs).first()
 
@@ -775,7 +771,7 @@ async def login():
 	form = LoginForm()
 	if (await validate_form(form)):
 		user = load_user(nickname=form.login.data)
-		if (not user):
+		if (not user or not check_password_hash(user.password, form.password.data)):
 			await flash("Incorrect login or password.")
 			return redirect(url_for('login'))
 		login_user(user, form.remember_me.data)
