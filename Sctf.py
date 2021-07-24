@@ -1159,12 +1159,13 @@ def init():
 	load_tasks()
 
 @apmain
+@aparg('-l', '--listen', default='0.0.0.0')
 @aparg('-p', '--port', type=int)
 @aparg('--debug', action='store_true')
 def main(cargs):
 	port = cargs.port or random.Random(sys.argv[0]+'|'+os.getcwd()).randint(60000, 65535)
-	if (cargs.debug): app.env = 'development'; setlogfile(None); app.run(port=port, debug=True, use_reloader=False)  # no autoreload to support cgis
-	else: app.run('0.0.0.0', port=port)
+	if (cargs.debug): app.env = 'development'; setlogfile(None); app.run(cargs.listen, port=port, debug=True, use_reloader=False)  # no autoreload to support cgis
+	else: app.run(cargs.listen, port=port)
 
 if (__name__ == '__main__'): exit(main())
 
