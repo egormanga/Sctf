@@ -143,9 +143,11 @@ def before_request():
 
 @app.after_request
 async def after_request(r):
-	if ('text/html' in r.content_type): r.set_data(css_html_js_minify.html_minify(await r.get_data(as_text=True), comments=True))
-	elif ('text/css' in r.content_type): r.set_data(css_html_js_minify.css_minify(await r.get_data(as_text=True)))
-	elif ('text/javascript' in r.content_type or 'application/javascript' in r.content_type): r.set_data(css_html_js_minify.js_minify(await r.get_data(as_text=True)))
+	### TODO:
+	#if ('text/html' in r.content_type): r.set_data(css_html_js_minify.html_minify(await r.get_data(as_text=True), comments=True))
+	#elif ('text/css' in r.content_type): r.set_data(css_html_js_minify.css_minify(await r.get_data(as_text=True)))
+	#elif ('text/javascript' in r.content_type or 'application/javascript' in r.content_type): r.set_data(css_html_js_minify.js_minify(await r.get_data(as_text=True)))
+	###
 	return r
 
 def password_hash(password): return generate_password_hash(password, method='sha256')
