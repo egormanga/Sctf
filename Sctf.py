@@ -142,7 +142,7 @@ def before_request():
 	g.builtins, g.operator = builtins, operator
 
 @app.after_request
-def after_request(r):
+async def after_request(r):
 	if ('text/html' in r.content_type): r.set_data(css_html_js_minify.html_minify(await r.get_data(as_text=True), comments=True))
 	elif ('text/css' in r.content_type): r.set_data(css_html_js_minify.css_minify(await r.get_data(as_text=True)))
 	elif ('text/javascript' in r.content_type or 'application/javascript' in r.content_type): r.set_data(css_html_js_minify.js_minify(await r.get_data(as_text=True)))
