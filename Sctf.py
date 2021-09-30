@@ -177,13 +177,13 @@ def load_user(**kwargs):
 
 @lm.request_loader
 def load_user_from_request(request):
-	header = request.headers.get('Authorization')
-	if (header is None): return None
-	header = header.replace('Basic ', '', 1).strip()
-	try: header = base64.b64decode(header)
-	except TypeError: pass
-	if (header != app.config['SECRET_KEY'].encode()): return None
-	return load_user(id=0, nickname='admin')
+	if ((header := request.headers.get('Authorization')) is not None):
+		header = header.replace('Basic ', '', 1).strip()
+		try: header = base64.b64decode(header)
+		except ValueError: pass
+		if (header != app.config['SECRET_KEY'].encode()): return None
+		return load_user(id=0)
+	return None
 
 def task_dir(id): return os.path.join('tasks', secure_filename(id))
 def load_task(id): return json.load(open(os.path.join(task_dir(id), 'task.json')))
@@ -798,6 +798,7 @@ async def register():
 			return redirect(url_for('register'))
 		else:
 			user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.password.data), discord_id=form.discord_id.data)
+			if (not load_user(0)): user.id = 0
 			db.session.add(user)
 			db.session.commit()
 			log(f"User registered: {user}")
