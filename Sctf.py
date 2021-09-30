@@ -1,8 +1,8 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # Sctf
 
 import quart.flask_patch  # must be the first import
-import pygeoip, markdown, werkzeug, astral.sun, astral.geocoder, css_html_js_minify
+import logging, pygeoip, markdown, werkzeug, astral.sun, astral.geocoder, css_html_js_minify
 import quart; quart.htmlsafe_dumps = None
 from quart import *
 from flask_login import UserMixin, LoginManager, login_user, logout_user, current_user, login_required
@@ -30,6 +30,14 @@ class PrefixedQuart(Quart):
 
 	def route(self, path, *args, **kwargs):
 		return super().route((self.config.get('APPLICATION_ROOT') or '')+path, *args, **kwargs)
+
+class SexcepthookFormatter(logging.Formatter):
+	def formatException(self, ei):
+		with io.StringIO() as f:
+			Sexcepthook(*ei, file=f, linesep='\n')
+			return f.getvalue()
+
+quart.logging.default_handler.setFormatter(SexcepthookFormatter())
 
 app = PrefixedQuart(__name__)
 app.config.from_object('config')
@@ -776,6 +784,7 @@ async def login():
 	if (await validate_form(form)):
 		user = load_user(nickname=form.login.data)
 		if (not user or not check_password_hash(user.password, form.password.data)):
+			log(f"Failed login attempt ({form.login.data}): incorrect {'password' if (load_user(nickname=form.login.data)) else 'login'}.")
 			await flash("Incorrect login or password.")
 			return redirect(url_for('login'))
 		login_user(user, form.remember_me.data)
@@ -1169,9 +1178,12 @@ def init():
 @aparg('--debug', action='store_true')
 def main(cargs):
 	port = cargs.port or random.Random(sys.argv[0]+'|'+os.getcwd()).randint(60000, 65535)
-	if (cargs.debug): app.env = 'development'; setlogfile(None); app.run(cargs.listen, port=port, debug=True, use_reloader=False)  # no autoreload to support cgis
-	else: app.run(cargs.listen, port=port)
+	try:
+		if (cargs.debug): app.env = 'development'; setlogfile(None); app.run(cargs.listen, port=port, debug=True, use_reloader=False)  # no autoreload to support cgis
+		else: app.run(cargs.listen, port=port)
+	except KeyboardInterrupt as ex: exit(ex)
 
 if (__name__ == '__main__'): exit(main())
 
 # by Sdore, 2021
+# www.sdore.me
