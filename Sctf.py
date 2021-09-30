@@ -1,16 +1,18 @@
 #!/usr/bin/python3
 # Sctf
 
+import quart.flask_patch  # must be the first import
 import pygeoip, markdown, werkzeug, astral.sun, astral.geocoder, css_html_js_minify
 import quart; quart.htmlsafe_dumps = None
-import quart.flask_patch
 from quart import *
 from flask_login import UserMixin, LoginManager, login_user, logout_user, current_user, login_required
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from wtforms import TextField, SelectField, BooleanField, IntegerField, PasswordField
-from wtforms.validators import Email, EqualTo, Optional, Required
+from wtforms.validators import Email, EqualTo, Optional, DataRequired
 from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.exceptions import HTTPException, InternalServerError
 from utils.nolog import *
 
 class PrefixedQuart(Quart):
@@ -31,6 +33,7 @@ class PrefixedQuart(Quart):
 
 app = PrefixedQuart(__name__)
 app.config.from_object('config')
+app.register_error_handler(Exception, lambda ex: ex if (isinstance(ex, HTTPException)) else Sexcepthook(ex.__class__, ex, ex.__traceback__) or InternalServerError())
 app.prefix_static()
 db = SQLAlchemy(app)
 lm = LoginManager()
@@ -40,6 +43,8 @@ lm.login_view = 'login'
 #app.jinja_env.lstrip_blocks = True
 
 setlogfile('Sctf.log')
+
+tmpdir = app.config.get('TASKDATA_TMPDIR', '/tmp/Sctf')
 
 freeports_tcp = set(range(*app.config.get('TASK_PORT_RANGE', (51200, 51300))))
 freeports_udp = set(range(*app.config.get('TASK_PORT_RANGE', (51200, 51300))))
@@ -69,27 +74,27 @@ db.create_all()
 db.session.commit()
 
 class LoginForm(FlaskForm):
-	login = TextField('Login', validators=[Required("Login is required.")])
-	password = PasswordField('Password', validators=[Required("Password is required.")])
+	login = TextField('Login', validators=[DataRequired("Login is required.")])
+	password = PasswordField('Password', validators=[DataRequired("Password is required.")])
 	remember_me = BooleanField('Remember')
 
 class RegisterForm(FlaskForm):
-	nickname = TextField('Nickname', validators=[Required("Nickname is required.")])
-	email = TextField('E-Mail', validators=[Required("E-Mail is required."), Email("E-Mail must be valid.")])
+	nickname = TextField('Nickname', validators=[DataRequired("Nickname is required.")])
+	email = TextField('E-Mail', validators=[DataRequired("E-Mail is required."), Email("E-Mail must be valid.")])
 	discord_id = IntegerField('Discord id')
-	password = PasswordField('Password', validators=[Required("Password is required.")])
-	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
+	password = PasswordField('Password', validators=[DataRequired("Password is required.")])
+	password_repeat = PasswordField('Repeat password', validators=[DataRequired("Password repeat is required."), EqualTo('password', "Passwords must match.")])
 	remember_me = BooleanField('Remember')
 
 class EditUserForm(FlaskForm):
 	nickname = TextField('Nickname')
-	email = TextField('E-Mail', validators=[Required("E-Mail is required."), Email("E-Mail must be valid.")])
+	email = TextField('E-Mail', validators=[DataRequired("E-Mail is required."), Email("E-Mail must be valid.")])
 	discord_id = IntegerField('Discord id')
 
 class ChangePasswordForm(FlaskForm):
-	current_password = PasswordField('Current password', validators=[Required("Password is required.")])
-	new_password = PasswordField('New password', validators=[Required("New password is required.")])
-	new_password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('new_password', "Passwords must match.")])
+	current_password = PasswordField('Current password', validators=[DataRequired("Password is required.")])
+	new_password = PasswordField('New password', validators=[DataRequired("New password is required.")])
+	new_password_repeat = PasswordField('Repeat password', validators=[DataRequired("Password repeat is required."), EqualTo('new_password', "Passwords must match.")])
 
 class AdminBaseUserForm(FlaskForm):
 	nickname = TextField('Nickname')
@@ -109,8 +114,8 @@ class AdminDeleteUserForm(FlaskForm):
 
 class AdminPasswordResetForm(FlaskForm):
 	user = SelectField('User', coerce=int)
-	password = PasswordField('Password', validators=[Required("Password is required.")])
-	password_repeat = PasswordField('Repeat password', validators=[Required("Password repeat is required."), EqualTo('password', "Passwords must match.")])
+	password = PasswordField('Password', validators=[DataRequired("Password is required.")])
+	password_repeat = PasswordField('Repeat password', validators=[DataRequired("Password repeat is required."), EqualTo('password', "Passwords must match.")])
 
 class AdminSubsUserForm(FlaskForm):
 	user = SelectField('User', coerce=int)
@@ -126,7 +131,7 @@ async def validate_form(form):
 @app.before_request
 def before_request():
 	g.taskset = taskset
-	g.user = current_user
+	g.user = current_user._LocalProxy__local()  # fix damn jinja3 `auto_await()` bug
 	g.night = taskset.config.get('always_night') or is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
 	g.custom_css = os.path.exists(os.path.join(taskset.path, 'custom.css'))
 
@@ -137,11 +142,15 @@ def before_request():
 	g.builtins, g.operator = builtins, operator
 
 @app.after_request
-def after_request(r):
-	#if ('text/html' in r.content_type): r.set_data(css_html_js_minify.html_minify(r.get_data(as_text=True)))
+async def after_request(r):
+	### TODO:
+	#if ('text/html' in r.content_type): r.set_data(css_html_js_minify.html_minify(await r.get_data(as_text=True), comments=True))
+	#elif ('text/css' in r.content_type): r.set_data(css_html_js_minify.css_minify(await r.get_data(as_text=True)))
+	#elif ('text/javascript' in r.content_type or 'application/javascript' in r.content_type): r.set_data(css_html_js_minify.js_minify(await r.get_data(as_text=True)))
+	###
 	return r
 
-def password_hash(nickname, password): return hashlib.sha3_256((nickname+hashlib.md5((nickname+password).encode()).hexdigest()+password).encode()).hexdigest()
+def password_hash(password): return generate_password_hash(password, method='sha256')
 
 def mktoken(id: int, data: bytes) -> str:
 	id = VarInt.pack(id)
@@ -163,22 +172,18 @@ def load_user(id: int):
 	return User.query.filter_by(id=id).first()
 
 @dispatch
-def load_user(*, nickname: str, password: str):
-	return User.query.filter_by(nickname=nickname, password=password_hash(nickname, password)).first()
-
-@dispatch
 def load_user(**kwargs):
 	return User.query.filter_by(**kwargs).first()
 
 @lm.request_loader
 def load_user_from_request(request):
-	header = request.headers.get('Authorization')
-	if (header is None): return None
-	header = header.replace('Basic ', '', 1).strip()
-	try: header = base64.b64decode(header)
-	except TypeError: pass
-	if (header != app.config['SECRET_KEY'].encode()): return None
-	return load_user(id=0, nickname='admin')
+	if ((header := request.headers.get('Authorization')) is not None):
+		header = header.replace('Basic ', '', 1).strip()
+		try: header = base64.b64decode(header)
+		except ValueError: pass
+		if (header != app.config['SECRET_KEY'].encode()): return None
+		return load_user(id=0)
+	return None
 
 def task_dir(id): return os.path.join('tasks', secure_filename(id))
 def load_task(id): return json.load(open(os.path.join(task_dir(id), 'task.json')))
@@ -291,7 +296,8 @@ class Task:
 		else: flag = None
 
 		ext = os.path.splitext(srcfilename)[1]
-		outfilename = tempfile.mkstemp(prefix=os.path.basename(os.path.abspath(taskset.path))+'_taskdata_', suffix=outext if (outext is not None) else None)[1]
+		os.makedirs(tmpdir, exist_ok=True)
+		outfilename = tempfile.mkstemp(dir=tmpdir, prefix='taskdata_', suffix=outext if (outext is not None) else None)[1]
 
 		if (ext == '.sh'): cmd = f"""FLAG={repr(flag)} {srcfilename} {outfilename}"""
 		elif (ext == '.c'): cmd = f"""tcc {f'''-DFLAG='"{flag}"' ''' if (flag is not None) else ''}{srcfilename} -o {outfilename}"""
@@ -768,8 +774,8 @@ async def login():
 
 	form = LoginForm()
 	if (await validate_form(form)):
-		user = load_user(nickname=form.login.data, password=form.password.data)
-		if (not user):
+		user = load_user(nickname=form.login.data)
+		if (not user or not check_password_hash(user.password, form.password.data)):
 			await flash("Incorrect login or password.")
 			return redirect(url_for('login'))
 		login_user(user, form.remember_me.data)
@@ -791,7 +797,8 @@ async def register():
 			await flash(f"Пользователь с таким {'ником' if (usern) else 'e-mail'} уже существует.")
 			return redirect(url_for('register'))
 		else:
-			user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.nickname.data, form.password.data), discord_id=form.discord_id.data)
+			user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.password.data), discord_id=form.discord_id.data)
+			if (not load_user(0)): user.id = 0
 			db.session.add(user)
 			db.session.commit()
 			log(f"User registered: {user}")
@@ -812,11 +819,11 @@ async def change_password():
 	form = ChangePasswordForm()
 
 	if (await validate_form(form)):
-		if (password_hash(g.user.nickname, form.current_password.data) != g.user.password):
+		if (not check_password_hash(g.user.password, form.current_password.data)):
 			await flash("Current password is wrong.")
 			return redirect(url_for('change_password'))
 
-		g.user.password = password_hash(g.user.nickname, form.new_password.data)
+		g.user.password = password_hash(form.new_password.data)
 		db.session.commit()
 
 		await flash("Password changed successfully.")
@@ -845,7 +852,7 @@ async def submit_flag():
 	flag = request.args.get('flag')
 
 	task = taskset.tasks.get(id)
-	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
+	if (task is None): return abort(Response(f"No task with such id: <code>{task}</code>.", 404))
 
 	log(f"Got flag from {g.user} for {task}: '{flag}'")
 
@@ -877,7 +884,7 @@ async def submit_flag():
 		else:
 			if (r): logexception(WTFException(r))
 
-	return 'Success!'  # used in main.html template js
+	return "Success!"  # used in main.html template js
 
 @app.route('/taskdata')
 async def taskdata():
@@ -929,7 +936,7 @@ async def taskflag():
 @app.route('/web/<task>')
 async def web(task):
 	task = taskset.tasks.get(task)
-	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
+	if (task is None): return abort(Response(f"No task with such id: <code>{task}</code>.", 404))
 	if ('http' not in task.daemons.daemons): return abort(404, f"No web page for this task.")
 
 	response = await make_response(redirect(f"http://{task.daemons.http.host}:{task.daemons.http.port}"))
@@ -974,7 +981,7 @@ async def admin_create_user():
 	form = AdminCreateUserForm()
 
 	if (await validate_form(form)):
-		user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.nickname.data, form.password.data), discord_id=form.discord_id.data, admin=form.admin.data)
+		user = User(nickname=form.nickname.data, email=form.email.data, password=password_hash(form.password.data), discord_id=form.discord_id.data, admin=form.admin.data)
 
 		db.session.add(user)
 		db.session.commit()
@@ -1054,7 +1061,7 @@ async def admin_reset_password():
 	if (await validate_form(form)):
 		user = load_user(id=form.user.data)
 
-		user.password = password_hash(user.nickname, form.password.data)
+		user.password = password_hash(form.password.data)
 
 		db.session.add(user)
 		db.session.commit()
@@ -1098,10 +1105,10 @@ async def admin_get_flag():
 	user = request.args.get('user')
 	token = request.args.get('token')
 
-	if (task is None or not (user is not None or token is not None)): return abort(400, "Usage: <code>/?task=&lt;task&gt;&user=&lt;uid&gt;</code> or <code>/?task=&lt;task&gt;&token=&lt;token&gt;</code>.")
+	if (task is None or not (user is not None or token is not None)): return abort(Response("Usage: <code>/?task=&lt;task&gt;&user=&lt;uid&gt;</code> or <code>/?task=&lt;task&gt;&token=&lt;token&gt;</code>.", 400))
 
 	task = taskset.tasks.get(task)
-	if (task is None): return abort(404, f"No task with such id: <code>{task}</code>.")
+	if (task is None): return abort(Response(f"No task with such id: <code>{task}</code>.", 404))
 
 	if (token is not None):
 		user = check_token(token, task.id.encode())
@@ -1133,7 +1140,8 @@ async def admin_reload_tasks():
 def load_tasks():
 	global taskset
 
-	stale_taskdata = '/tmp/'+os.path.basename(os.path.abspath('.'))+'_taskdata_*'
+	assert (not glob.has_magic(tmpdir))
+	stale_taskdata = os.path.join(tmpdir, 'taskdata_*')
 	log(f"Removing stale taskdata: {stale_taskdata}")
 	for i in glob.iglob(stale_taskdata):
 		os.remove(i)
@@ -1156,12 +1164,13 @@ def init():
 	load_tasks()
 
 @apmain
+@aparg('-l', '--listen', default='0.0.0.0')
 @aparg('-p', '--port', type=int)
 @aparg('--debug', action='store_true')
 def main(cargs):
 	port = cargs.port or random.Random(sys.argv[0]+'|'+os.getcwd()).randint(60000, 65535)
-	if (cargs.debug): app.env = 'development'; setlogfile(None); app.run(port=port, debug=True, use_reloader=False)  # no autoreload to support cgis
-	else: app.run('0.0.0.0', port=port)
+	if (cargs.debug): app.env = 'development'; setlogfile(None); app.run(cargs.listen, port=port, debug=True, use_reloader=False)  # no autoreload to support cgis
+	else: app.run(cargs.listen, port=port)
 
 if (__name__ == '__main__'): exit(main())
 
