@@ -131,7 +131,7 @@ async def validate_form(form):
 @app.before_request
 def before_request():
 	g.taskset = taskset
-	g.user = current_user
+	g.user = current_user._LocalProxy__local()  # fix damn jinja3 `auto_await()` bug
 	g.night = taskset.config.get('always_night') or is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
 	g.custom_css = os.path.exists(os.path.join(taskset.path, 'custom.css'))
 
