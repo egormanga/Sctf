@@ -159,6 +159,7 @@ async def after_request(r):
 	return r
 
 def password_hash(password): return generate_password_hash(password, method='sha256')
+def password_hash_old(nickname, password): return hashlib.sha3_256((nickname+hashlib.md5((nickname+password).encode()).hexdigest()+password).encode()).hexdigest()
 
 def mktoken(id: int, data: bytes) -> str:
 	id = VarInt.pack(id)
@@ -783,11 +784,20 @@ async def login():
 	form = LoginForm()
 	if (await validate_form(form)):
 		user = load_user(nickname=form.login.data)
+
+		if (user and user.password == password_hash_old(form.login.data, form.password.data)):
+			log(f"Fixed old password hash for {user.nickname}.")
+			user.password = password_hash(form.password.data)
+			db.session.add(user)
+			db.session.commit()
+
 		if (not user or not check_password_hash(user.password, form.password.data)):
-			log(f"Failed login attempt ({form.login.data}): incorrect {'password' if (load_user(nickname=form.login.data)) else 'login'}.")
+			log(f"Failed login attempt ({form.login.data}): incorrect {'password' if (user) else 'login'}.")
 			await flash("Incorrect login or password.")
 			return redirect(url_for('login'))
+
 		login_user(user, form.remember_me.data)
+
 		return redirect(url_for('login'))
 
 	return await render_template('login.html', form=form)
