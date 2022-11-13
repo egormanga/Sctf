@@ -2,7 +2,7 @@
 # Sctf
 
 import quart.flask_patch  # must be the first import
-import logging, pygeoip, markdown, werkzeug, astral.sun, astral.geocoder, css_html_js_minify
+import logging, pygeoip, aiofiles, markdown, requests, werkzeug, astral.sun, astral.geocoder, css_html_js_minify
 import quart; quart.htmlsafe_dumps = None
 from quart import *
 from flask_login import UserMixin, LoginManager, login_user, logout_user, current_user, login_required
