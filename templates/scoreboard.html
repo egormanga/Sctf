@@ -50,8 +50,8 @@
 			{% for user, score in scoreboard if not user.admin or g.user.admin %}
 				{%- if not user.admin %}{% set ns.place = ns.place+1 %}{% endif %}
 			{# -#}	<tr{% if score == 0 or g.user.admin and user.admin %} class="zeroscored"{% endif %}>
-				{# -#}	<td>{% if not user.admin %}{{ ns.place }}{% endif %}</td>
-				{# -#}	<td>{% if g.user.admin and user.admin %}<span title="admin">&star;</span> {% endif %}<a href="{{ url_for('user', nickname=user.nickname) }}">{{ user.nickname }}</a></td>
+				{# -#}	<td>{% if not user.admin %}{{ ns.place }}{% else %}&star;{% endif %}</td>
+				{# -#}	<td><a href="{{ url_for('user', nickname=user.nickname) }}">{{ user.nickname }}</a></td>
 				{# -#}	<td align="right">{{ score }}</td>
 				{# -#}	<td></td>
 					{%- set solved = user.solved.split(',') -%}
