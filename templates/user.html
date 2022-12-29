@@ -27,6 +27,7 @@
 				<li><a href="{{ url_for('admin_edit_user', user=u.id) }}">[Admin] Edit</a></li>
 				<li><a href="{{ url_for('admin_delete_user', user=u.id) }}">[Admin] Delete</a></li>
 				<li><a href="{{ url_for('admin_reset_password', user=u.id) }}">[Admin] Reset password</a></li>
+				<li><a href="{{ url_for('admin_set_solved', user=u.id, task='') }}">[Admin] Set if task is solved for this user</a></li>
 				<li><a href="{{ url_for('admin_get_flag', task='', user=u.id) }}">[Admin] Get flag for this user</a></li>
 				<li><a href="{{ url_for('admin_subs_user', user=u.id) }}">[Admin] Log in as this user</a></li>
 			</ul>

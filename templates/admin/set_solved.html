@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+	{% block title -%}
+		[Admin] Set if task is solved for user
+	{%- endblock %}
+
+	{% block body -%}
+		<form action="" method="post">
+			{{ form.hidden_tag() }}
+			<p>{{ form.user(placeholder=form.user.label.text, onchange="let params = new URLSearchParams(document.location.search); params.set('user', this.value); document.location.search = params.toString()") }}</p>
+			<p>{{ form.task(placeholder=form.task.label.text, onchange="let params = new URLSearchParams(document.location.search); params.set('task', this.value); document.location.search = params.toString()") }}</p>
+			<p>{{ form.solved.label.text }} {{ form.solved() }}</p>
+			<p><input type="submit" value="Set"></p>
+		</form>
+	{%- endblock %}

@@ -127,6 +127,11 @@ class AdminPasswordResetForm(FlaskForm):
 class AdminSubsUserForm(FlaskForm):
 	user = SelectField('User', coerce=int)
 
+class AdminSetSolvedForm(FlaskForm):
+	user = SelectField('User', coerce=int)
+	task = SelectField('Task')
+	solved = BooleanField('Solved')
+
 async def validate_form(form):
 	res = form.validate_on_submit()
 	for field, errors in form.errors.items():
@@ -860,7 +865,7 @@ async def tasks_json():
 		'cat': i.cat,
 		'cost': str(i.scoring),
 		'desc': i.format_desc(),
-		'solved': len(i.solved_by),
+		'solved': i.solved,
 		'files': [(name, mktoken(g.user.id, hashlib.md5(os.path.abspath(os.path.join(i.dir, 'files', name)).encode()).digest())) for name in i.files],
 	} for i in taskset.tasks.values()}, ensure_ascii=False, separators=',:'), mimetype='application/json')
 
@@ -890,7 +895,7 @@ async def submit_flag():
 			'content': random.choice(discord_texts).format(f'<@{g.user.discord_id}>' if (g.user.discord_id) else g.user.nickname),
 			'embeds': [{
 				'title': task.title,
-				'description': f"[{task.cost}]\n(solved by {len(task.solved_by)})",
+				'description': f"[{task.cost}]\n(solved by {task.solved})",
 				'url': f"http{'s'*(not app.config.get('NO_HTTPS', False))}://{socket.gethostbyname(host) if (app.config.get('USE_IP_AS_HOST', False)) else app.config.get('HOSTNAME', socket.gethostname())}"+url_for('index', _anchor=task.id),
 				'color': 32767,
 			}],
@@ -1115,6 +1120,45 @@ async def admin_subs_user():
 
 	return await render_template('admin/subs_user.html', form=form)
 
+@app.route('/admin/set_solved', methods=('GET', 'POST'))
+@login_required
+async def admin_set_solved():
+	if (not g.user.admin): return abort(403)
+
+	form = AdminSetSolvedForm()
+	form.user.choices = [(u.id, u.nickname) for u in User.query.all()]
+	form.task.choices = [(t.id, t.title) for t in taskset.tasks.values()]
+
+	if (await validate_form(form)):
+		task = taskset.tasks.get(form.task.data)
+		if (task is None): return abort(Response(f"No task with such id: <code>{task}</code>.", 404))
+
+		user = load_user(id=form.user.data)
+		solved = user.solved.split(',')
+
+		if (form.solved.data): solved.append(task.id)
+		elif (task.id in solved): solved.remove(task.id)
+
+		user.solved = ','.join(S(solved).uniquize()).strip(',')
+
+		db.session.add(user)
+		db.session.commit()
+		scoreboard_flag.set()
+
+		await flash(f"[Admin] {'S' if (form.solved.data) else 'Uns'}olved {task} for {user}")
+		return redirect(url_for('index'))
+
+	try: user = load_user(id=int(request.args.get('user'))) or raise_(KeyError)
+	except Exception: pass
+	else:
+		form.user.data = user.id
+		task = taskset.tasks.get(request.args.get('task'))
+		if (task is not None):
+			form.task.data = task.id
+			form.solved.data = (task.id in user.solved.split(','))
+
+	return await render_template('admin/set_solved.html', form=form)
+
 @app.route('/admin/get_flag')
 @login_required
 async def admin_get_flag():
@@ -1195,5 +1239,5 @@ def main(cargs):
 
 if (__name__ == '__main__'): exit(main())
 
-# by Sdore, 2021
-# www.sdore.me
+# by Sdore, 2021-22
+#   www.sdore.me
