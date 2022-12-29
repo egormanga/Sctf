@@ -141,7 +141,11 @@
 
 			$.ajax({
 				url: "{{ url_for('tasks_json') }}",
-				success: data => tasks = data,
+				success: data => {
+					tasks = data;
+					if (window.location.hash.substr(1))
+						task_popup_show(window.location.hash.substr(1));
+				},
 				error: e => console.error(e.responseText),
 			});
 
@@ -152,8 +156,6 @@
 						this.style.display = 'none';
 				}.bind(tp));
 				$(document).keyup(e => {if (e.keyCode == 27) task_popup_hide();});
-				if (window.location.hash.substr(1))
-					task_popup_show(window.location.hash.substr(1));
 			}
 
 			function task_popup_hide() {
