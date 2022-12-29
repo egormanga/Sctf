@@ -461,7 +461,7 @@ class Scoring_dynamic(Scoring):
 
 	def __str__(self):
 		cost, cost_stable = self.cost, self.cost_stable
-		return str(cost) + str(cost_stable).join('()')*(cost != cost_stable)
+		return f"{cost}{f'/{cost_stable}' if (cost != cost_stable) else ''}"
 
 	@abc.abstractproperty
 	def cost(self):
