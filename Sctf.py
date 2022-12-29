@@ -18,9 +18,9 @@ from utils.nolog import *
 class PrefixedQuart(Quart):
 	def prefix_static(self):
 		if (not self.has_static_folder): return
-		application_root = '/' + (self.config.get('APPLICATION_ROOT') or '').strip('/')
+		application_root = ('/' + (self.config.get('APPLICATION_ROOT') or '').strip('/'))
 		if (not application_root.strip('/')): return
-		self.static_url_path = application_root + self.static_url_path
+		self.static_url_path = (application_root + self.static_url_path)
 		static_host = self.url_map.rules[0].host
 		self.url_map = quart.routing.Map(self.url_map.host_matching)
 		self.add_url_rule(
@@ -29,7 +29,7 @@ class PrefixedQuart(Quart):
 		)
 
 	def route(self, path, *args, **kwargs):
-		return super().route((self.config.get('APPLICATION_ROOT') or '')+path, *args, **kwargs)
+		return super().route(((self.config.get('APPLICATION_ROOT') or '') + path), *args, **kwargs)
 
 class SexcepthookFormatter(logging.Formatter):
 	def formatException(self, ei):
@@ -144,7 +144,7 @@ async def validate_form(form):
 def before_request():
 	g.taskset = taskset
 	g.user = current_user._LocalProxy__wrapped()  # fix damn jinja3 `auto_await()` bug
-	g.night = taskset.config.get('always_night') or is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
+	g.night = (taskset.config.get('always_night') or is_night(request.headers.get('X-Forwarded-For', request.remote_addr)))
 	g.custom_css = os.path.exists(os.path.join(taskset.path, 'custom.css'))
 
 	g.contest_started = (taskset.config.get('contest_started') or 'contest_start' not in taskset.config or time.localtime() >= time.strptime(taskset.config['contest_start'], '%d.%m.%y %H:%M'))
@@ -163,11 +163,11 @@ async def after_request(r):
 	return r
 
 def password_hash(password): return generate_password_hash(password, method='sha256')
-def password_hash_old(nickname, password): return hashlib.sha3_256((nickname+hashlib.md5((nickname+password).encode()).hexdigest()+password).encode()).hexdigest()
+def password_hash_old(nickname, password): return hashlib.sha3_256((nickname + hashlib.md5((nickname + password).encode()).hexdigest() + password).encode()).hexdigest()
 
 def mktoken(id: int, data: bytes) -> str:
 	id = VarInt.pack(id)
-	return id.hex()+hashlib.md5(data+hashlib.md5(secret_key).digest()+id).hexdigest()
+	return (id.hex() + hashlib.md5(data + hashlib.md5(secret_key).digest() + id).hexdigest())
 
 def check_token(token: [str, bytes], data: bytes) -> [int, None]:
 	if (not isinstance(token, str)):
@@ -228,11 +228,11 @@ class Taskset:
 		return Sdict(self.config.get('default', {}).get(x, {}))
 
 class Task:
-	__slots__ = ('taskset', 'id', 'title', 'cat', 'scoring', 'flag', 'desc', 'dir', 'cgis', 'daemons', 'files')
+	__slots__ = ('taskset', 'id', 'title', 'cat', 'authors', 'scoring', 'flag', 'desc', 'dir', 'cgis', 'daemons', 'files')
 
 	@init_defaults
-	def __init__(self, taskset, id, *, title, cat, cost, flag):
-		self.taskset, self.id, self.title, self.cat = taskset, id, title, cat
+	def __init__(self, taskset, id, *, title, cat, authors, cost, flag):
+		self.taskset, self.id, self.title, self.cat, self.authors = taskset, id, title, cat, tuple(authors)
 
 		if (isnumber(cost)): self.scoring = Scoring(cost)
 		else:
@@ -256,7 +256,7 @@ class Task:
 		self.desc = markdown.markdown(open(os.path.join(self.dir, 'task.md')).read())
 
 		filesdir = os.path.join(self.dir, 'files')
-		self.files = os.listdir(filesdir) if (os.path.isdir(filesdir)) else ()
+		self.files = (os.listdir(filesdir) if (os.path.isdir(filesdir)) else ())
 
 		if (os.path.isdir(os.path.join(self.dir, 'cgi'))): self.cgis = CGIs(self)
 		if (os.path.isdir(os.path.join(self.dir, 'daemons'))): self.daemons = Daemons(self)
@@ -310,7 +310,7 @@ class Task:
 
 		ext = os.path.splitext(srcfilename)[1]
 		os.makedirs(tmpdir, exist_ok=True)
-		outfilename = tempfile.mkstemp(dir=tmpdir, prefix='taskdata_', suffix=outext if (outext is not None) else None)[1]
+		outfilename = tempfile.mkstemp(dir=tmpdir, prefix='taskdata_', suffix=(outext if (outext is not None) else None))[1]
 
 		if (ext == '.sh'): cmd = f"""FLAG={repr(flag)} {srcfilename} {outfilename}"""
 		elif (ext == '.c'): cmd = f"""tcc {f'''-DFLAG='"{flag}"' ''' if (flag is not None) else ''}{srcfilename} -o {outfilename}"""
@@ -408,41 +408,41 @@ class Flag_l33t(Flag_dynamic):
 		'y': 'yY',
 		'z': 'zZ',
 	}
+	leet_caseless = {k: str().join(sorted(set(v.casefold()))) for k, v in leet.items()}
 
 	def __init__(self, task, *, dynamic, pattern, caseless=False):
 		assert (dynamic == 'l33t')
 		self.task, self.pattern, self.caseless = task, pattern, caseless
 
 	def get_flag(self, uid):
-		if (self.caseless): leet = {k: str().join(set(v.casefold())) for k, v in self.leet.items()}
-		else: leet = self.leet
-		rand = random.Random(rand_salt+str(uid))
-		r = re.sub(r'{.*}', lambda x: x[0].translate({ord(i): rand.choice(leet.get(i, i)) for i in set(x[0])}), self.pattern)
-		return r.casefold() if (self.caseless) else r
+		leet = (self.leet_caseless if (self.caseless) else self.leet)
+		rand = random.Random(rand_salt + str(uid))
+		r = re.sub(r'{.*}', lambda x: x[0].translate({ord(i): rand.choice(leet.get(i, i)) for i in sorted(set(x[0]))}), self.pattern)
+		return (r.casefold() if (self.caseless) else r)
 
 	def validate_flag(self, uid, flag):
-		return super().validate_flag(uid, flag.casefold() if (self.caseless) else flag)
+		return super().validate_flag(uid, (flag.casefold() if (self.caseless) else flag))
 
 class Flag_random(Flag_dynamic):
 	__slots__ = ('pattern', 'length', 'caseless')
 
 	def __init__(self, task, *, dynamic, pattern=None, length=16, caseless=False):
 		assert (dynamic == 'random')
-		self.task, self.pattern, self.length, self.caseless = task, pattern if (pattern is not None) else task.taskset.flag_prefix+'{.}', length, caseless
+		self.task, self.pattern, self.length, self.caseless = task, (pattern if (pattern is not None) else (task.taskset.flag_prefix + '{.}')), length, caseless
 
 	def get_flag(self, uid):
-		# charset = string.ascii_lowercase if (self.caseless) else string.ascii_letters
-		return self.pattern.replace('.', randstr(self.length, caseless=self.caseless, seed=rand_salt+str(uid)), 1)
+		#charset = (string.ascii_lowercase if (self.caseless) else string.ascii_letters)
+		return self.pattern.replace('.', randstr(self.length, caseless=self.caseless, seed=(rand_salt + str(uid))), 1)
 
 	def validate_flag(self, uid, flag):
-		return super().validate_flag(uid, flag.casefold() if (self.caseless) else flag)
+		return super().validate_flag(uid, (flag.casefold() if (self.caseless) else flag))
 
 class Flag_func(Flag_dynamic):
 	__slots__ = ('code',)
 
 	def __init__(self, task, *, dynamic, func):
 		assert (dynamic == 'func')
-		exec('def f(uid, flag):\n'+S('\n'.join(func) if (isiterablenostr(func)) else func).indent())
+		exec('def f(uid, flag):\n' + S('\n'.join(func) if (isiterablenostr(func)) else func).indent())
 		self.task, self.func = task, f
 
 	def validate_flag(self, uid, flag):
@@ -581,6 +581,10 @@ class CGI_tcp(CGI):
 			await asyncio.wait_for(proc.wait(), timeout=app.config.get('SUBPROCESS_TIMEOUT', 300))
 			to_proc.cancel()
 			from_proc.cancel()
+			try: proc.terminate()
+			except ProcessLookupError: pass
+			try: proc.kill()
+			except ProcessLookupError: pass
 		writer.close()
 		log(self.task, '-', addr)
 
@@ -622,6 +626,10 @@ class CGI_udp(CGI):
 				await asyncio.wait_for(proc.wait(), timeout=app.config.get('SUBPROCESS_TIMEOUT', 300))
 				#to_proc.cancel()
 				from_proc.cancel()
+				#try: proc.terminate()
+				#except ProcessLookupError: pass
+				#try: proc.kill()
+				#except ProcessLookupError: pass
 			log(self.task, '-', addr)
 
 	__slots__ = ('executable', 'server')
@@ -667,8 +675,10 @@ class Daemon:
 		self.process = subprocess.Popen(os.path.abspath(executable), stdin=subprocess.DEVNULL, stdout=sys.stderr, cwd=self.task.dir, env=self.env)
 
 	def __del__(self):
+		try: self.process.terminate()
+		except (AttributeError, ProcessLookupError): pass
 		try: self.process.kill()
-		except AttributeError: pass
+		except (AttributeError, ProcessLookupError): pass
 
 	def get_env(self):
 		env = os.environ.copy()
@@ -742,7 +752,7 @@ class Daemon_http(Daemon):
 			except OSError: continue
 			else: break
 		env['PORT'] = str(self.port)
-		env['TOKEN_COOKIE'] = 'task_token_'+self.task.id
+		env['TOKEN_COOKIE'] = f"task_token_{self.task.id}"
 
 		return env
 
@@ -862,6 +872,7 @@ async def tasks_json():
 
 	return Response(json.dumps({i.id: {
 		'title': i.title,
+		'authors': list(i.authors),
 		'cat': i.cat,
 		'cost': str(i.scoring),
 		'desc': i.format_desc(),
@@ -886,7 +897,7 @@ async def submit_flag():
 	if (not re.match(r'^%s{.*}$' % taskset.flag_prefix, flag)): return ("This is not a flag. Flag format is: «%s{...}»" % taskset.flag_prefix)
 	if (not task.flag.validate_flag(g.user.id, flag.strip())): return ('Жуж' if (random.random() < .01) else 'Wrong')
 
-	g.user.solved = ','.join(S(g.user.solved.split(',')+[id]).uniquize()).strip(',')
+	g.user.solved = ','.join(S(g.user.solved.split(',') + [id]).uniquize()).strip(',')
 	db.session.commit()
 	scoreboard_flag.set()
 
@@ -896,7 +907,7 @@ async def submit_flag():
 			'embeds': [{
 				'title': task.title,
 				'description': f"[{task.cost}]\n(solved by {task.solved})",
-				'url': f"http{'s'*(not app.config.get('NO_HTTPS', False))}://{socket.gethostbyname(host) if (app.config.get('USE_IP_AS_HOST', False)) else app.config.get('HOSTNAME', socket.gethostname())}"+url_for('index', _anchor=task.id),
+				'url': (f"http{'s'*(not app.config.get('NO_HTTPS', False))}://{socket.gethostbyname(host) if (app.config.get('USE_IP_AS_HOST', False)) else app.config.get('HOSTNAME', socket.gethostname())}" + url_for('index', _anchor=task.id)),
 				'color': 32767,
 			}],
 			**({
@@ -964,7 +975,7 @@ async def web(task):
 	if ('http' not in task.daemons.daemons): return abort(404, f"No web page for this task.")
 
 	response = await make_response(redirect(f"http://{task.daemons.http.host}:{task.daemons.http.port}"))
-	response.set_cookie('task_token_'+task.id, mktoken(g.user.id, task.id.encode()))
+	response.set_cookie(f"task_token_{task.id}", mktoken(g.user.id, task.id.encode()))
 	return response
 
 @app.route('/scoreboard')
@@ -1231,7 +1242,7 @@ def init():
 @aparg('-p', '--port', type=int)
 @aparg('--debug', action='store_true')
 def main(cargs):
-	port = cargs.port or random.Random(sys.argv[0]+'|'+os.getcwd()).randint(60000, 65535)
+	port = cargs.port or random.Random(f"{sys.argv[0]}|{os.getcwd()}").randint(60000, 65535)
 	try:
 		if (cargs.debug): app.env = 'development'; setlogfile(None); app.run(cargs.listen, port=port, debug=True, use_reloader=False)  # no autoreload to support cgis
 		else: app.run(cargs.listen, port=port)
@@ -1239,5 +1250,5 @@ def main(cargs):
 
 if (__name__ == '__main__'): exit(main())
 
-# by Sdore, 2021-22
+# by Sdore, 2019-22
 #   www.sdore.me

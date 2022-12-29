@@ -72,7 +72,7 @@
 				color: #777 !important;
 			}
 
-			.task-popup-title, .task-popup-cost {
+			.task-popup-title, .task-popup-author, .task-popup-cost {
 				width: 100%;
 				text-align: center;
 			}
@@ -81,6 +81,15 @@
 				font-size: 42px;
 				margin-right: 2em;
 				font-family: 'Open Sans Condensed', 'Ubuntu', sans-serif;
+			}
+
+			.task-popup-author {
+				font-size: 18px;
+				font-family: 'Monospaced', monospace;
+			}
+
+			.task-popup-author code {
+				color: #2980b9;
 			}
 
 			.task-popup-cost {
@@ -160,6 +169,7 @@
 				tp = document.getElementById('task-popup-wrapper');
 				tp.querySelector('.task-popup').task_id = id;
 				tp.querySelector('.task-popup-title').textContent = task.title;
+				tp.querySelector('.task-popup-author').innerHTML = ('by ' + task.authors.map(x => `<code>${x}</code>`).join(' & '));
 				tp.querySelector('.task-popup-cost').textContent = task.cost;
 				tp.querySelector('.task-popup-solved-by').textContent = task.solved;
 				tp.querySelector('.task-popup-content').innerHTML = task.desc;
@@ -203,6 +213,8 @@
 			<div class="task-popup" task_id="">
 				<a class="task-popup-close" onclick="task_popup_hide()">&times;</a>
 				<div class="task-popup-title"></div>
+				<div class="task-popup-author"></div>
+				<br>
 				<div class="task-popup-cost"></div>
 				<div class="task-popup-solved">Solved by: <span class="task-popup-solved-by"></span></div>
 				<div class="task-popup-content"></div>
