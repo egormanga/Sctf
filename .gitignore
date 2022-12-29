@@ -1,8 +1,6 @@
-**.db
-**.log
-**.old
-**.bak
-**__pycache__
-**_config.py
-venv
-.vscode
+.venv/
+*.db
+*.log
+*.old
+*.bak
+__pycache__/

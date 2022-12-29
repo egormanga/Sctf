@@ -78,8 +78,7 @@ class User(db.Model, UserMixin):
 	def score(self):
 		return sum(taskset.tasks[i].cost for i in self.solved.split(',') if i in taskset.tasks)
 
-db.create_all()
-db.session.commit()
+app.before_serving(db.create_all)
 
 class LoginForm(FlaskForm):
 	login = StringField('Login', validators=[DataRequired("Login is required.")])
@@ -139,7 +138,7 @@ async def validate_form(form):
 @app.before_request
 def before_request():
 	g.taskset = taskset
-	g.user = current_user._LocalProxy__local()  # fix damn jinja3 `auto_await()` bug
+	g.user = current_user._LocalProxy__wrapped()  # fix damn jinja3 `auto_await()` bug
 	g.night = taskset.config.get('always_night') or is_night(request.headers.get('X-Forwarded-For', request.remote_addr))
 	g.custom_css = os.path.exists(os.path.join(taskset.path, 'custom.css'))
 
@@ -783,7 +782,7 @@ async def login():
 
 	form = LoginForm()
 	if (await validate_form(form)):
-		user = load_user(nickname=form.login.data)
+		user = (load_user(nickname=form.login.data) or load_user(email=form.login.data))
 
 		if (user and user.password == password_hash_old(form.login.data, form.password.data)):
 			log(f"Fixed old password hash for {user.nickname}.")
@@ -812,6 +811,7 @@ async def register():
 	if (await validate_form(form)):
 		usern = load_user(nickname=form.nickname.data)
 		usere = load_user(email=form.email.data)
+
 		if (usern or usere):
 			await flash(f"Пользователь с таким {'ником' if (usern) else 'e-mail'} уже существует.")
 			return redirect(url_for('register'))
