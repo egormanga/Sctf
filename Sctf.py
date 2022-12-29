@@ -986,6 +986,11 @@ async def scoreboard():
 	scoreboard = sorted({i: i.score for i in User.query.all()}.items(), key=operator.itemgetter(1), reverse=True)
 	return await render_template('scoreboard.html', scoreboard=scoreboard)
 
+@app.route('/user')
+@login_required
+async def user_():
+	return redirect(url_for('user', nickname=g.user.nickname))
+
 @app.route('/user/<nickname>')
 @login_required
 async def user(nickname):

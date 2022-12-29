@@ -18,7 +18,7 @@
 	{%- endblock %}
 
 	{% block header -%}
-		<font size="4"> | <a href="{{ url_for('index') }}">Tasks</a> | <a href="{{ url_for('scoreboard') }}">Scoreboard</a></font>
+		<font size="4"> | <a href="{{ url_for('index') }}">Tasks</a> | <a href="{{ url_for('scoreboard') }}">Scoreboard</a>{% if u.id == g.user.id %} | <a href="{{ url_for('change_password') }}">Change password</a>{% endif %}</font>
 	{%- endblock %}
 
 	{% block content -%}
@@ -38,11 +38,13 @@
 		<b>Solved tasks:</b>
 		{% set tasks = g.builtins.sorted(g.taskset.tasks.values(), key=g.operator.attrgetter('cost'), reverse=True) -%}
 		{% set solved = u.solved.split(',') -%}
-		{% for i in tasks -%}
-			{% if i.id in solved -%}
-				<li><a href="#{{ i.id }}" onclick="task_popup_show('{{ i.id }}')">{{ i.title }}</a> | {{ i.scoring }}</li>
-		{# -#}	{% endif %}
-		{%- else %}
-			(none)
-		{%- endfor %}
+		<ul>
+			{% for i in tasks -%}
+				{% if i.id in solved -%}
+					<li><a href="#{{ i.id }}" onclick="task_popup_show('{{ i.id }}')">{{ i.title }}</a> | {{ i.scoring }}</li>
+			{# -#}	{% endif %}
+			{%- else %}
+				(none)
+			{%- endfor %}
+		</ul>
 	{%- endblock %}
