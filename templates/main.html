@@ -56,7 +56,8 @@
 				color: blue;
 			}
 
-			.task-popup-attachments a {
+			.task-popup-attachments a,
+			.task-popup-solution-attachments a {
 				font-size: 18px;
 			}
 
@@ -72,7 +73,9 @@
 				color: #777 !important;
 			}
 
-			.task-popup-title, .task-popup-author, .task-popup-cost {
+			.task-popup-title,
+			.task-popup-author,
+			.task-popup-cost {
 				width: 100%;
 				text-align: center;
 			}
@@ -101,8 +104,14 @@
 				text-align: center;
 			}
 
-			.task-popup-content {
+			.task-popup-content,
+			.task-popup-solution-content {
 				word-break: break-word;
+			}
+
+			.task-popup-solution-content {
+				padding-left: 12px;
+				border-left: 5px solid #eee;
 			}
 
 			.task-popup-flag-input {
@@ -133,6 +142,10 @@
 				border: 2px groove darkgray;
 				color: white;
 				cursor: default;
+			}
+
+			.task-popup-solution {
+				display: none;
 			}
 		</style>
 
@@ -176,7 +189,13 @@
 				tp.querySelector('.task-popup-solved-by').textContent = task.solved;
 				tp.querySelector('.task-popup-content').innerHTML = task.desc;
 				tp.querySelector('.task-popup-attachments').innerHTML = task.files.map(x => '<a href="'+"{{ url_for('taskdata') }}"+'?id='+id+'&file='+x[0]+'&token='+x[1]+'">&#128462; '+x[0]+'</a>').join('<br>');
-				$('.task-popup-content p').has('code:only-child').each(function(){
+				if (task.solution) {
+					tp.querySelector('.task-popup-solution').style.display = 'block';
+					tp.querySelector('.task-popup-solution-content').innerHTML = task.solution.desc;
+					tp.querySelector('.task-popup-solution-attachments').innerHTML = task.solution.files.map(x => '<a href="'+"{{ url_for('tasksolution') }}"+'?id='+id+'&file='+x[0]+'&token='+x[1]+'">&#128462; '+x[0]+'</a>').join('<br>');
+				} else tp.querySelector('.task-popup-solution').style.display = 'none';
+
+				$('.task-popup-content p, .task-popup-solution-content p').has('code:only-child').each(function(){
 					const p = $(this);
 					let hasalsotext = false;
 					p.contents().each(function(){
@@ -187,6 +206,7 @@
 					});
 					if (!hasalsotext) p.addClass('code-block');
 				});
+
 				tp.style.display = 'block';
 				setTimeout(() => tp.classList.add('task-popup-shown'), 0);
 			}
@@ -222,9 +242,16 @@
 				<div class="task-popup-content"></div>
 				<div class="task-popup-attachments"></div>
 				<br>
-				<div style="display: flex;">
+				<div class="task-popup-flag" style="display: flex;">
 					<input class="task-popup-flag-input" placeholder="{{ g.taskset.flag_prefix }}{...}" oninput="validate_flag()" onkeypress="if (event.keyCode == 13 && validate_flag()) submit_flag()"></input>
 					<button class="task-popup-flag-submit" onclick="submit_flag()" disabled>Submit</button>
+				</div>
+				<div class="task-popup-solution">
+					<br>
+					<h3 style="color: green">Intended solution:</h3>
+					<div class="task-popup-solution-content"></div>
+					<div class="task-popup-solution-attachments"></div>
+					<h5 style="display: inline; color: gray">(note: please do not share this solution with other contestants.)</h5>
 				</div>
 			</div>
 		</div>

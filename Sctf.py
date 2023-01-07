@@ -226,7 +226,7 @@ class Taskset:
 		return Sdict(self.config.get('default', {}).get(x, {}))
 
 class Task:
-	__slots__ = ('taskset', 'id', 'title', 'cat', 'authors', 'scoring', 'flag', 'desc', 'dir', 'cgis', 'daemons', 'files')
+	__slots__ = ('taskset', 'id', 'title', 'cat', 'authors', 'scoring', 'flag', 'desc', 'dir', 'cgis', 'daemons', 'files', 'writeups_dir', 'solution_desc', 'solution_files')
 
 	@init_defaults
 	def __init__(self, taskset, id, *, title, cat, authors, cost, flag):
@@ -250,11 +250,20 @@ class Task:
 			self.flag = allsubclassdict(Flag)[f"Flag_{flag['dynamic']}"](self, **flag)
 
 		self.dir = task_dir(id)
+		with open(os.path.join(self.dir, 'task.md')) as f:
+			desc_src = f.read()
+		self.desc = markdown.markdown(desc_src)
+		files_dir = os.path.join(self.dir, 'files')
+		self.files = (os.listdir(files_dir) if (os.path.isdir(files_dir)) else ())
 
-		self.desc = markdown.markdown(open(os.path.join(self.dir, 'task.md')).read())
-
-		filesdir = os.path.join(self.dir, 'files')
-		self.files = (os.listdir(filesdir) if (os.path.isdir(filesdir)) else ())
+		self.writeups_dir = os.path.join(self.dir, 'writeups')
+		try:
+			with open(os.path.join(self.writeups_dir, 'solution.md')) as f:
+				solution_desc_src = f.read()
+		except FileNotFoundError: self.solution_desc = None
+		else: self.solution_desc = markdown.markdown(solution_desc_src)
+		solution_files_dir = os.path.join(self.writeups_dir, 'files')
+		self.solution_files = (os.listdir(solution_files_dir) if (os.path.isdir(solution_files_dir)) else ())
 
 		if (os.path.isdir(os.path.join(self.dir, 'cgi'))): self.cgis = CGIs(self)
 		if (os.path.isdir(os.path.join(self.dir, 'daemons'))): self.daemons = Daemons(self)
@@ -346,6 +355,10 @@ class Task:
 	@property
 	def cost_stable(self):
 		return self.scoring.cost_stable
+
+	@property
+	def has_writeups(self):
+		return (self.solution_desc is not None or self.solution_files)
 
 class Flag:
 	__slots__ = ('flag',)
@@ -887,6 +900,10 @@ async def tasks_json():
 		'desc': i.format_desc(),
 		'solved': i.solved,
 		'files': [(name, mktoken(g.user.id, hashlib.md5(os.path.abspath(os.path.join(i.dir, 'files', name)).encode()).digest())) for name in i.files],
+		**({'solution': {
+			'desc': i.solution_desc,
+			'files': [(name, mktoken(g.user.id, hashlib.md5(os.path.abspath(os.path.join(i.writeups_dir, 'files', name)).encode()).digest())) for name in i.solution_files],
+		}} if (i.has_writeups and (g.user.admin or i.id in g.user.solved.split(','))) else {}),
 	} for i in taskset.tasks.values()}, ensure_ascii=False, separators=',:'), mimetype='application/json')
 
 @app.route('/submit_flag')
@@ -953,11 +970,36 @@ async def taskdata():
 	headers['Content-Length'] = str(os.path.getsize(filename))
 
 	#async with quart.static.async_open(filename, 'rb') as f:
-	#	data = await f.read()
 	async with aiofiles.open(filename, 'rb') as f:
 		data = await f.read()
 
-	return Response(data, mimetype=mimetypes.guess_type(os.path.basename(filename))[0] or quart.helpers.DEFAULT_MIMETYPE, headers=headers)
+	return Response(data, mimetype=(mimetypes.guess_type(os.path.basename(filename))[0] or quart.helpers.DEFAULT_MIMETYPE), headers=headers)
+
+@app.route('/tasksolution')
+async def tasksolution(): # TODO FIXME: join with `taskdata()'
+	id = request.args.get('id')
+	file = request.args.get('file')
+	token = request.args.get('token')
+	filename = os.path.join(task_dir(id), 'writeups', 'files', file)
+
+	if (not g.user.admin and not g.contest_started): return abort(403, "The contest has not started yet.")
+
+	uid = check_token(token, hashlib.md5(os.path.abspath(filename).encode()).digest())
+	if (uid is None): return abort(403)
+
+	task = taskset.tasks[id]
+
+	# Flask-like send_file():
+
+	headers = dict()
+	headers['Content-Disposition'] = f"attachment; filename={file}"
+	headers['Content-Length'] = str(os.path.getsize(filename))
+
+	#async with quart.static.async_open(filename, 'rb') as f:
+	async with aiofiles.open(filename, 'rb') as f:
+		data = await f.read()
+
+	return Response(data, mimetype=(mimetypes.guess_type(os.path.basename(filename))[0] or quart.helpers.DEFAULT_MIMETYPE), headers=headers)
 
 @app.route('/taskflag')
 async def taskflag():

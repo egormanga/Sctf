@@ -94,9 +94,9 @@
 					<h2 class="cat-header">{{ cat }}</h2>
 					{% for i in g.taskset.cats[cat] -%}
 						<div class="task">
-							{%- if i.id in g.user.solved.split(',') %}<strike>{% endif -%}
+							{%- if i.id in g.user.solved.split(',') %}<s>{% endif -%}
 							<a href="#{{ i.id }}" onclick="task_popup_show('{{ i.id }}')">{{ i.title }}</a>
-							{%- if i.id in g.user.solved.split(',') %}</strike> (solved){% endif -%}
+							{%- if i.id in g.user.solved.split(',') %}</s> (solved){% endif -%}
 						</div>
 					{% endfor %}
 				</div>
