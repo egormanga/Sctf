@@ -9,7 +9,7 @@
 
 			#tasks {
 				padding: 0px 72px;
-				column-count: {{ g.builtins.len(g.taskset.cats) }};
+				column-count: {{ g.taskset.cats | length }};
 				column-gap: 32px;
 				column-rule: 2px solid lightblue;
 			}

@@ -36,7 +36,7 @@
 		{%- endif %}
 		<h2>Score: {{ u.score }}</h2>
 		<b>Solved tasks:</b>
-		{% set tasks = g.builtins.sorted(g.taskset.tasks.values(), key=g.operator.attrgetter('cost'), reverse=True) -%}
+		{% set tasks = (g.taskset.tasks.values() | sort(reverse=True)) -%}
 		{% set solved = u.solved.split(',') -%}
 		<ul>
 			{% for i in tasks -%}

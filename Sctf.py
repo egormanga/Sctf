@@ -151,8 +151,6 @@ def before_request():
 	g.contest_ended = (taskset.config.get('contest_ended') or 'contest_end' in taskset.config and time.localtime() >= time.strptime(taskset.config['contest_end'], '%d.%m.%y %H:%M'))
 	g.contest_running = (g.contest_started and not g.contest_ended)
 
-	g.builtins, g.operator = builtins, operator
-
 @app.after_request
 async def after_request(r):
 	### TODO:
@@ -264,6 +262,9 @@ class Task:
 	def __repr__(self):
 		return f"<Task '{self.id}' ({self.title})>"
 
+	def __lt__(self, other):
+		return (self.cost < other.cost or self.solved > other.solved or self.solved_all > other.solved_all)
+
 	def format_desc(self):
 		host = app.config.get('TASK_HOSTNAME', app.config.get('HOSTNAME', socket.gethostname()))
 		ip = socket.gethostbyname(host)
@@ -327,8 +328,16 @@ class Task:
 		return sum(self.id in u.solved.split(',') for u in User.query.filter_by(admin=False).all())
 
 	@property
+	def solved_all(self):
+		return sum(self.id in u.solved.split(',') for u in User.query.all())
+
+	@property
 	def solved_by(self):
 		return [u for u in User.query.filter_by(admin=False).all() if self.id in u.solved.split(',')]
+
+	@property
+	def solved_by_all(self):
+		return [u for u in User.query.all() if self.id in u.solved.split(',')]
 
 	@property
 	def cost(self):
@@ -948,7 +957,7 @@ async def taskdata():
 	async with aiofiles.open(filename, 'rb') as f:
 		data = await f.read()
 
-	return Response(data, mimetype=mimetypes.guess_type(os.path.basename(filename))[0] or quart.static.DEFAULT_MIMETYPE, headers=headers)
+	return Response(data, mimetype=mimetypes.guess_type(os.path.basename(filename))[0] or quart.helpers.DEFAULT_MIMETYPE, headers=headers)
 
 @app.route('/taskflag')
 async def taskflag():
